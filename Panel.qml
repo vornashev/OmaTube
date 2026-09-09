@@ -19,6 +19,8 @@ Panel {
   readonly property var barIdentity: hostWidget || root
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.5)
+  readonly property var youtubeAuth: logic && logic.stateData && logic.stateData.youtubeAuth
+    ? logic.stateData.youtubeAuth : ({ configured: false, authenticated: false, cookieCount: 0, browser: "chromium" })
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   function open() { root.controller.show(); if (logic) logic.refresh() }
@@ -393,6 +395,63 @@ Panel {
                   text: "+"; foreground: root.dim; horizontalPadding: 0; verticalPadding: 0
                   onClicked: root.logic.request("setting", { key: "textWidth", value: Math.min(600, Number(root.logic.stateData.preferences.textWidth || 220) + 20) })
                 }
+              }
+            }
+
+            Rectangle {
+              width: parent.width
+              height: Math.max(1, Style.spacing.hairline)
+              color: Color.popups.border
+            }
+
+            Text {
+              width: parent.width
+              text: root.youtubeAuth.error ? String(root.youtubeAuth.error)
+                : (root.youtubeAuth.authenticated
+                  ? "YouTube: авторизованная сессия подключена"
+                  : (root.youtubeAuth.configured
+                    ? "YouTube: гостевые cookies. Войдите в Chromium и импортируйте снова"
+                    : "YouTube: cookies не подключены"))
+              color: root.youtubeAuth.error ? Color.urgent
+                : (root.youtubeAuth.authenticated ? Color.accent : root.dim)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WordWrap
+            }
+
+            Row {
+              width: parent.width
+              height: Style.space(34)
+              spacing: Style.space(5)
+              Button {
+                id: importYoutubeCookies
+                focusable: true
+                Accessible.name: "Импортировать cookies YouTube из Chromium"
+                width: root.youtubeAuth.configured
+                  ? (parent.width - parent.spacing) * .7 : parent.width
+                height: parent.height
+                text: root.youtubeAuth.configured ? "Обновить из Chromium" : "Импортировать из Chromium"
+                iconText: "󰋼"
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                fontSize: Style.font.bodySmall
+                horizontalPadding: Style.space(8)
+                verticalPadding: 0
+                onClicked: root.logic.request("youtube_auth_import", { browser: "chromium" })
+              }
+              Button {
+                visible: Boolean(root.youtubeAuth.configured || root.youtubeAuth.error)
+                focusable: true
+                Accessible.name: "Удалить cookies YouTube"
+                width: visible ? parent.width - importYoutubeCookies.width - parent.spacing : 0
+                height: parent.height
+                text: "Удалить"
+                foreground: Color.urgent
+                fontFamily: root.fontFamily
+                fontSize: Style.font.caption
+                horizontalPadding: Style.space(6)
+                verticalPadding: 0
+                onClicked: root.logic.request("youtube_auth_clear", ({}))
               }
             }
           }

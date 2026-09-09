@@ -1,2 +1,3 @@
 dbus-next==0.2.3
 yt-dlp[default]==2026.8.19
+SecretStorage==3.5.0

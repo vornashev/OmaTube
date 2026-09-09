@@ -12,6 +12,7 @@ Item {
   readonly property bool hasTrack: logic ? logic.hasTrack : false
   readonly property bool playing: logic ? logic.playing : false
   readonly property bool loading: logic ? logic.busy : false
+  readonly property string videoMode: logic ? logic.videoMode : "audio"
   readonly property bool showControls: preferences.showControls === undefined ? true : Boolean(preferences.showControls)
   readonly property bool showCover: preferences.showCover === undefined ? true : Boolean(preferences.showCover)
   readonly property bool showAuthor: preferences.showAuthor === undefined ? true : Boolean(preferences.showAuthor)
@@ -21,7 +22,9 @@ Item {
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var media: hasTrack ? logic.stateData.current.media : ({})
-  implicitWidth: row.width + Style.space(10)
+  readonly property real fixedContentWidth: Style.space((showControls ? 105 : 0) + (showCover ? 25 : 0))
+  implicitWidth: fixedContentWidth + Style.space(10)
+    + (showAuthor || showTitle ? informationWidth + Style.space(5) : 0)
   implicitHeight: bar ? bar.barSize : Style.bar.sizeHorizontal
 
   Row {
@@ -73,7 +76,11 @@ Item {
     }
     Item {
       id: informationSlot
-      visible: root.showAuthor || root.showTitle; width: root.informationWidth; height: root.implicitHeight; clip: true
+      visible: root.showAuthor || root.showTitle
+      width: Math.max(0, Math.min(root.informationWidth,
+        root.width - root.fixedContentWidth - Style.space(15)))
+      height: root.implicitHeight
+      clip: true
       Text {
         id: informationLabel
         anchors.verticalCenter: parent.verticalCenter

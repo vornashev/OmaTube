@@ -5,7 +5,7 @@ import unittest
 
 from backend.errors import OmaTubeError
 from backend.player import Player
-from backend.resolver import ResolvedAudio
+from backend.resolver import ResolvedMedia, ResolvedStream
 from backend.storage import Storage
 
 
@@ -15,7 +15,7 @@ def media(video_id):
 
 class FakeResolver:
     def __init__(self): self.futures = {}; self.ignore_cancel = set()
-    async def resolve_audio(self, video_id):
+    async def resolve(self, video_id):
         future = asyncio.get_running_loop().create_future(); self.futures[video_id] = future
         try:
             return await asyncio.shield(future)
@@ -29,17 +29,28 @@ class FakeMpv:
         self.loaded = []
         self.writer = None
         self.load_error = None
+        self.paused = False
+        self.video_mode = "audio"
+        self.video_error = None
+        self.stop_preserve = []
+        self.loader_states = []
 
-    async def load(self, audio, start=0):
+    async def load(self, media, start=0, paused=False):
         if self.load_error:
             raise self.load_error
-        self.loaded.append((audio.url, start))
+        self.loaded.append((media.audio.url, start))
+        self.paused = paused
         self.writer = True
     async def set_volume(self, value): pass
     async def set_mute(self, value): pass
-    async def pause(self, value): pass
+    async def pause(self, value): self.paused = value
+    async def set_video_loading(self, visible, token="mode"):
+        self.loader_states.append((visible, token))
+    async def set_video_mode(self, value):
+        if self.video_error and value != "audio": raise self.video_error
+        self.video_mode = value
     async def seek(self, value): pass
-    async def stop_playback(self): pass
+    async def stop_playback(self, preserve_window=False): self.stop_preserve.append(preserve_window)
     async def stop(self): pass
 
 
@@ -60,17 +71,18 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         first = self.resolver.futures["AAAAAA1"]
         await self.player.replace(media("BBBBBB2")); await asyncio.sleep(0)
         second = self.resolver.futures["BBBBBB2"]
-        first.set_result(ResolvedAudio("https://stream.invalid/old", {}, 60, True)); await asyncio.sleep(0.01)
+        first.set_result(ResolvedMedia(ResolvedStream("https://stream.invalid/old", {}), 60, True)); await asyncio.sleep(0.01)
         self.assertEqual(self.mpv.loaded, [])
-        second.set_result(ResolvedAudio("https://stream.invalid/new", {}, 60, True)); await asyncio.sleep(0.01)
+        second.set_result(ResolvedMedia(ResolvedStream("https://stream.invalid/new", {}), 60, True)); await asyncio.sleep(0.01)
         self.assertEqual(self.mpv.loaded[0][0], "https://stream.invalid/new")
 
     async def test_restore_is_paused_without_resolving(self):
         entry = {"entryId": "entry-1", "media": media("AAAAAA1")}
-        self.storage.save_player_state({"queue": [entry], "currentEntryId": "entry-1", "position": 12, "volume": 42, "muted": False, "shuffle": False, "repeat": "off"})
+        self.storage.save_player_state({"queue": [entry], "currentEntryId": "entry-1", "position": 12, "volume": 42, "muted": False, "shuffle": False, "repeat": "off", "videoMode": "floating"})
         restored = Player(self.storage, self.resolver, self.mpv, lambda: None)
         self.assertEqual(restored.state, "paused")
         self.assertEqual(restored.position, 12)
+        self.assertEqual(restored.status()["videoMode"], "floating")
         self.assertEqual(self.resolver.futures, {})
 
     async def test_duplicate_queue_removal_targets_entry_id(self):
@@ -81,8 +93,8 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row["entryId"] for row in self.player.queue], [first])
     async def test_resolved_metadata_replaces_placeholder(self):
         await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)
-        self.resolver.futures["AAAAAA1"].set_result(ResolvedAudio(
-            "https://stream.invalid/audio", {}, 60, True,
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/audio", {}), 60, True,
             title="Resolved title", author="Resolved author",
             thumbnail_url="https://img.invalid/cover.jpg",
             canonical_url="https://www.youtube.com/watch?v=AAAAAA1",
@@ -102,7 +114,7 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.player.duration)
         self.assertFalse(self.player.can_seek)
         self.resolver.futures["AAAAAA1"].set_result(
-            ResolvedAudio("https://stream.invalid/audio", {}, 60, True)
+            ResolvedMedia(ResolvedStream("https://stream.invalid/audio", {}), 60, True)
         )
         await asyncio.sleep(0.01)
         self.assertEqual(self.player.state, "error")
@@ -135,6 +147,7 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         player.current_id = "entry"
         player.state = "playing"
         player.duration = 4
+        player._loaded_generation = player.generation
 
         await player.handle_mpv_event({"event": "end-file", "reason": "eof"})
 
@@ -182,9 +195,8 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
     async def test_disconnect_preserves_track_and_play_recovers_position(self):
         await self.player.replace(media("AAAAAA1"))
         await asyncio.sleep(0)
-        self.resolver.futures["AAAAAA1"].set_result(ResolvedAudio(
-            "https://stream.invalid/first",
-            {},
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/first", {}),
             120,
             True,
         ))
@@ -203,9 +215,8 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
 
         await self.player.play()
         await asyncio.sleep(0)
-        self.resolver.futures["AAAAAA1"].set_result(ResolvedAudio(
-            "https://stream.invalid/recovered",
-            {},
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/recovered", {}),
             120,
             True,
         ))
@@ -216,6 +227,118 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         ))
         self.assertEqual(self.player.state, "playing")
         self.assertIsNone(self.player.error)
+
+    async def test_seek_loader_waits_for_cache_resume(self):
+        entry = {"entryId": "entry-1", "media": media("AAAAAA1")}
+        self.player.queue = [entry]
+        self.player.current_id = entry["entryId"]
+        self.player.state = "playing"
+        self.player.can_seek = True
+        self.player._loaded_generation = self.player.generation
+
+        await self.player.seek(30)
+        self.assertTrue(self.player.status()["buffering"])
+        await self.player.handle_mpv_event({
+            "event": "property-change", "name": "seeking", "data": False,
+        })
+        await self.player.handle_mpv_event({
+            "event": "property-change", "name": "paused-for-cache", "data": True,
+        })
+        await asyncio.sleep(0.3)
+        self.assertTrue(self.player.status()["buffering"])
+        await self.player.handle_mpv_event({
+            "event": "property-change", "name": "pause", "data": False,
+        })
+        await self.player.handle_mpv_event({
+            "event": "property-change", "name": "core-idle", "data": True,
+        })
+        await self.player.handle_mpv_event({
+            "event": "property-change", "name": "paused-for-cache", "data": False,
+        })
+        await asyncio.sleep(0.3)
+        self.assertTrue(self.player.status()["buffering"])
+
+        await self.player.handle_mpv_event({
+            "event": "property-change", "name": "core-idle", "data": False,
+        })
+        self.assertTrue(self.player.status()["buffering"])
+        await asyncio.sleep(0.3)
+        self.assertFalse(self.player.status()["buffering"])
+
+    async def test_video_modes_and_close_keep_paused_track_position(self):
+        await self.player.replace(media("AAAAAA1"))
+        await self.player.pause()
+        await self.player.set_video_mode("tile")
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/audio", {}), 60, True,
+            video=ResolvedStream("https://stream.invalid/video", {}),
+        ))
+        await self.player.resolve_task
+        self.assertEqual(self.player.state, "paused")
+        self.assertTrue(self.mpv.paused)
+        self.assertEqual(self.mpv.video_mode, "tile")
+        self.player.position = 23
+        await self.player.set_video_mode("floating")
+        await self.player.handle_mpv_event({"event": "client-message", "args": ["omatube-video-closed"]})
+        self.assertEqual(self.player.status()["videoMode"], "audio")
+        self.assertEqual((self.player.position, self.player.state), (23, "paused"))
+        self.assertEqual(len(self.mpv.loaded), 1)
+        restored = Player(self.storage, self.resolver, self.mpv, lambda: None)
+        self.assertEqual((restored.video_mode, restored.position, restored.state), ("audio", 23, "paused"))
+
+    async def test_failed_video_enable_leaves_audio_playing_and_reports_error(self):
+        await self.player.replace(media("AAAAAA1"))
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/audio", {}), 60, True,
+        ))
+        await self.player.resolve_task
+        self.mpv.video_error = OmaTubeError("video_unavailable", "No video")
+        with self.assertRaises(OmaTubeError):
+            await self.player.set_video_mode("floating")
+        self.assertEqual(self.player.state, "playing")
+        self.assertEqual(self.player.video_mode, "audio")
+        self.assertEqual(self.player.error["code"], "video_unavailable")
+
+    async def test_latest_mode_wins_while_stale_track_resolves(self):
+        self.resolver.ignore_cancel.add("AAAAAA1")
+        await self.player.replace(media("AAAAAA1"))
+        first = self.resolver.futures["AAAAAA1"]
+        await self.player.set_video_mode("floating")
+        await self.player.replace(media("BBBBBB2"))
+        await self.player.set_video_mode("tile")
+        first.set_result(ResolvedMedia(ResolvedStream("https://stream.invalid/old", {}), 60, True))
+        self.resolver.futures["BBBBBB2"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/new", {}), 60, True,
+            video=ResolvedStream("https://stream.invalid/video", {}),
+        ))
+        await self.player.resolve_task
+        self.assertEqual(self.mpv.loaded, [("https://stream.invalid/new", 0)])
+        self.assertEqual(self.player.video_mode, "tile")
+        self.assertEqual(self.mpv.video_mode, "tile")
+
+    async def test_next_preserves_video_window_until_new_track_is_ready(self):
+        await self.player.set_video_mode("tile")
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2")])
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/audio-one", {}), 60, True,
+            video=ResolvedStream("https://stream.invalid/video-one", {}),
+        ))
+        await self.player.resolve_task
+        await self.player.next()
+        await asyncio.sleep(0)
+        self.assertTrue(self.mpv.stop_preserve[-1])
+        self.assertEqual(self.player.state, "loading")
+        await self.player.set_video_mode("audio")
+        self.assertEqual(self.mpv.video_mode, "audio")
+        await self.player.set_video_mode("tile")
+        self.resolver.futures["BBBBBB2"].set_result(ResolvedMedia(
+            ResolvedStream("https://stream.invalid/audio-two", {}), 60, True,
+            video=ResolvedStream("https://stream.invalid/video-two", {}),
+        ))
+        await self.player.resolve_task
+        self.assertEqual(self.player.video_mode, "tile")
+        await self.player.next()
+        self.assertFalse(self.mpv.stop_preserve[-1])
 
     async def test_replace_many_rejects_empty_queue(self):
         with self.assertRaises(OmaTubeError) as caught:

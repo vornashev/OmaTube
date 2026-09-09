@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          manifest_version="$(jq -r .version manifest.json)"
+          package_version="$(jq -r .version package.json)"
+          test "$version" = "$manifest_version"
+          test "$version" = "$package_version"
+
+      - name: Build release archive
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          archive="omatube-${TAG}.tar.gz"
+          prefix="omatube-${TAG}/"
+          git archive --format=tar.gz --prefix="$prefix" -o "$archive" "$TAG"
+          sha256sum "$archive" > "$archive.sha256"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            "omatube-${TAG}.tar.gz" \
+            "omatube-${TAG}.tar.gz.sha256" \
+            --verify-tag \
+            --generate-notes \
+            --title "OmaTube ${TAG}"

@@ -4,12 +4,12 @@
   "name": "OmaTube",
   "version": "0.1.0",
   "author": "vornashev",
-  "description": "Native YouTube and YouTube Music player with queue, collection, playlists and MPRIS",
+  "description": "Native YouTube and YouTube Music audio/video player with tiled and floating video, queue, collection, playlists and MPRIS",
   "kinds": ["bar-widget"],
   "entryPoints": { "barWidget": "BarWidget.qml" },
   "barWidget": {
     "displayName": "OmaTube",
-    "description": "Play YouTube and YouTube Music without keeping a browser open",
+    "description": "Play audio or tiled/floating video without a browser; control playback from the bar and popup",
     "category": "Media",
     "allowMultiple": false,
     "defaultSection": "right"

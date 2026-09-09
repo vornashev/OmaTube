@@ -12,7 +12,7 @@ Item {
   readonly property string cli: Quickshell.env("HOME") + "/.local/bin/omatube"
   readonly property string pluginDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/vornashev.omatube"
 
-  property var stateData: ({ state: "idle", current: null, position: 0, duration: null, preferences: ({}) })
+  property var stateData: ({ state: "idle", current: null, position: 0, duration: null, videoMode: "audio", buffering: false, youtubeAuth: ({ configured: false, authenticated: false, cookieCount: 0, browser: "chromium" }), preferences: ({ videoQuality: 1080 }) })
   property var details: ({ queue: [], views: ({}), operations: [] })
   property var lastResult: null
   property string lastCommand: ""
@@ -39,19 +39,37 @@ Item {
 
   readonly property bool hasTrack: Boolean(stateData.current && stateData.current.media)
   readonly property bool playing: stateData.state === "playing"
+  readonly property string videoMode: String(stateData.videoMode || "audio")
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: false
   readonly property var activeOperation: operation(activeOperationId)
   readonly property var runningOperation: latestOperation("running")
   readonly property var failedOperation: activeOperation && activeOperation.state === "failed" ? activeOperation : null
   readonly property bool busy: bootstrapProcess.running || actionProcess.running
-    || stateData.state === "loading" || Boolean(activeOperation && activeOperation.state === "running")
+    || stateData.state === "loading" || Boolean(stateData.buffering)
+    || Boolean(activeOperation && activeOperation.state === "running")
+  readonly property bool videoLoading: {
+    if (Boolean(stateData.buffering) && videoMode !== "audio") return true
+    if (stateData.state === "loading" && videoMode !== "audio") return true
+    if (!busy) return false
+    var operation = runningOperation
+    if (!operation) return runningCommand === "video_quality"
+      || (runningCommand === "video_mode" && String((runningPayload || ({})).value || "") !== "audio")
+    if (operation.kind === "video_quality") return true
+    return operation.kind === "video_mode"
+      && String((operation.request || ({})).value || "") !== "audio"
+  }
   readonly property string busyActivityKey: {
     if (bootstrapProcess.running) return "bootstrap"
     if (stateData.state === "loading") {
       var current = stateData.current || ({})
       var media = current.media || ({})
       return "player:" + String(current.entryId || media.videoId || "")
+    }
+    if (stateData.buffering) {
+      var bufferingCurrent = stateData.current || ({})
+      var bufferingMedia = bufferingCurrent.media || ({})
+      return "buffering:" + String(bufferingCurrent.entryId || bufferingMedia.videoId || "")
     }
     if (activeOperation && activeOperation.state === "running")
       return "operation:" + String(activeOperation.operationId || activeOperation.kind || "")
@@ -71,7 +89,10 @@ Item {
     var kind = activeOperation && activeOperation.state === "running"
       ? String(activeOperation.kind || "") : String(runningCommand || "")
     if (bootstrapProcess.running) return "Запускаем фоновый сервис…"
-    if (stateData.state === "loading") return "Получаем аудиопоток и подключаем mpv…"
+    if (stateData.buffering) return videoMode === "audio"
+      ? "Буферизуем аудио после перемотки…" : "Буферизуем видео после перемотки…"
+    if (stateData.state === "loading") return videoMode === "audio"
+      ? "Получаем аудиопоток и подключаем mpv…" : "Получаем видео и подключаем mpv…"
     if (kind === "suggestions") return "Подбираем варианты запроса…"
     if (kind === "search") return "Ищем в каталоге YouTube…"
     if (kind === "search_more" || kind === "entity_more") return "Загружаем следующую страницу…"
@@ -79,6 +100,9 @@ Item {
     if (kind === "playlist_copy") return "Копируем плейлист в коллекцию…"
     if (kind === "play_url" || kind === "play_view" || kind === "play_playlist") return "Подготавливаем воспроизведение…"
     if (kind === "collection" || kind === "open_playlist") return "Загружаем медиатеку…"
+    if (kind === "video_mode") return "Переключаем режим воспроизведения…"
+    if (kind === "youtube_auth_import") return "Импортируем cookies YouTube из Chromium…"
+    if (kind === "youtube_auth_clear") return "Удаляем cookies YouTube…"
     if (actionProcess.running) return "Выполняем действие…"
     return "Обновляем состояние…"
   }

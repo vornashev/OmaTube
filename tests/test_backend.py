@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from backend.errors import OmaTubeError
 from backend.main import Backend
@@ -58,7 +58,7 @@ class BlockingResolver:
     def __init__(self) -> None:
         self.release = asyncio.Event()
 
-    async def resolve_audio(self, _video_id: str):
+    async def resolve(self, _video_id: str):
         await self.release.wait()
 
 class BackendTests(unittest.IsolatedAsyncioTestCase):
@@ -98,6 +98,66 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
             "result": {"viewId": view_id},
             "error": None,
         }
+
+    async def test_youtube_auth_status_and_import_operation(self):
+        self.backend.youtube_auth.path.write_text(
+            "# Netscape HTTP Cookie File\n"
+            ".youtube.com\tTRUE\t/\tTRUE\t0\tSAPISID\ttest\n",
+            encoding="utf-8",
+        )
+        self.backend.youtube_auth.path.chmod(0o600)
+        self.assertTrue(self.backend.status()["youtubeAuth"]["authenticated"])
+        imported = {
+            "configured": True, "authenticated": True,
+            "cookieCount": 1, "browser": "chromium",
+        }
+        with patch.object(
+            self.backend.youtube_auth,
+            "import_from_browser",
+            AsyncMock(return_value=imported),
+        ) as run:
+            accepted = await self.backend.command({
+                "command": "youtube_auth_import", "browser": "chromium",
+            })
+            await self.backend.operations[accepted["operationId"]]["task"]
+        run.assert_awaited_once_with("chromium")
+        self.assertEqual(
+            self.backend.operations[accepted["operationId"]]["result"],
+            imported,
+        )
+
+    async def test_video_mode_accepts_slow_open_and_reports_failure_in_details(self):
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def open_video(_mode):
+            started.set()
+            await release.wait()
+            raise OmaTubeError("video_unavailable", "Video stream unavailable")
+
+        with patch.object(self.backend.player, "set_video_mode", open_video):
+            accepted = await asyncio.wait_for(
+                self.backend.command({"command": "video_mode", "value": "floating"}), 1,
+            )
+            await asyncio.wait_for(started.wait(), 1)
+            operation_id = accepted["operationId"]
+            details = await self.backend.command({"command": "details"})
+            record = next(row for row in details["operations"] if row["operationId"] == operation_id)
+            self.assertEqual(record["state"], "running")
+            release.set()
+            await self.backend.operations[operation_id]["task"]
+            details = await self.backend.command({"command": "details"})
+            record = next(row for row in details["operations"] if row["operationId"] == operation_id)
+            self.assertEqual(record["state"], "failed")
+            self.assertEqual(record["error"]["code"], "video_unavailable")
+
+    async def test_video_quality_accepts_supported_values_and_rejects_unknown_height(self):
+        accepted = await self.backend.command({"command": "video_quality", "value": 720})
+        await self.backend.operations[accepted["operationId"]]["task"]
+        self.assertEqual(self.backend.status()["preferences"]["videoQuality"], 720)
+        with self.assertRaises(OmaTubeError) as raised:
+            await self.backend.command({"command": "video_quality", "value": 800})
+        self.assertEqual(raised.exception.code, "invalid_request")
 
     async def test_details_omits_unchanged_sections_and_detects_new_session(self):
         self.backend.player.queue = [{"entryId": "one", "media": {"videoId": "one"}}]

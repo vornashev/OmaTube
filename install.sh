@@ -27,14 +27,14 @@ if [[ "$(realpath "$ROOT")" != "$(realpath "$PLUGIN_DIR")" ]]; then
   QML=(CatalogImage.qml SkeletonList.qml MediaRow.qml PlayerHeader.qml NowPage.qml SearchPage.qml CollectionPage.qml PlaylistPage.qml Panel.qml WidgetLogic.qml BarPlayer.qml BarWidget.qml manifest.json bootstrap.sh install.sh uninstall.sh requirements.lock package.json package-lock.json PATCHES LICENSE)
   for file in "${QML[@]}"; do install -C -m 644 "$ROOT/$file" "$PLUGIN_DIR/$file"; done
   chmod 755 "$PLUGIN_DIR/bootstrap.sh" "$PLUGIN_DIR/install.sh" "$PLUGIN_DIR/uninstall.sh"
-  for file in "$ROOT"/backend/*.py; do install -m 644 "$file" "$PLUGIN_DIR/backend/$(basename "$file")"; done
+  for file in "$ROOT"/backend/*.py "$ROOT"/backend/*.lua; do install -m 644 "$file" "$PLUGIN_DIR/backend/$(basename "$file")"; done
   install -m 755 "$ROOT/catalog/worker.mjs" "$PLUGIN_DIR/catalog/worker.mjs"
   install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$PLUGIN_DIR/scripts/patch-youtubei.mjs"
   install -m 755 "$ROOT/bin/omatube" "$PLUGIN_DIR/bin/omatube"
   install -m 644 "$ROOT/systemd/omatube.service" "$PLUGIN_DIR/systemd/omatube.service"
 fi
 
-for file in "$ROOT"/backend/*.py; do install -m 644 "$file" "$APP_DIR/backend/$(basename "$file")"; done
+for file in "$ROOT"/backend/*.py "$ROOT"/backend/*.lua; do install -m 644 "$file" "$APP_DIR/backend/$(basename "$file")"; done
 install -m 755 "$ROOT/catalog/worker.mjs" "$APP_DIR/catalog/worker.mjs"
 install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$APP_DIR/scripts/patch-youtubei.mjs"
 install -m 644 "$ROOT/requirements.lock" "$ROOT/package.json" "$ROOT/package-lock.json" "$APP_DIR/"

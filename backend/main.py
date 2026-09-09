@@ -10,12 +10,13 @@ import time
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
+from .auth import YouTubeAuth
 from .catalog import CatalogBridge
 from .errors import OmaTubeError
 from .mpris import MprisBridge
 from .mpv import MpvController
 from .player import Player
-from .resolver import AudioResolver
+from .resolver import MediaResolver, VIDEO_QUALITIES
 from .storage import Storage
 from .urls import normalize_youtube_url
 
@@ -24,6 +25,7 @@ MAX_RESPONSE = 8 * 1024 * 1024
 DEFAULT_PREFERENCES = {
     "showCover": True, "showAuthor": True, "showTitle": True, "showControls": True,
     "showProgress": True, "textWidth": 220, "marquee": False, "historyEnabled": True,
+    "videoQuality": 1080,
 }
 VIEW_OPERATION_KINDS = {
     "search",
@@ -46,12 +48,20 @@ class Backend:
         self.socket_path = self.runtime / "backend.sock"
         self.preferences_path = config_home / "preferences.json"
         self.preferences = self._load_preferences()
+        if type(self.preferences["videoQuality"]) is not int or self.preferences["videoQuality"] not in VIDEO_QUALITIES:
+            self.preferences["videoQuality"] = 1080
         self.storage = Storage(data_home / "library.sqlite3")
         proxy = os.environ.get("OMATUBE_PROXY") or os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
         self.catalog = CatalogBridge(app_root / "catalog/worker.mjs", proxy=proxy)
         python = app_root / ".venv/bin/python"
         if not python.exists(): python = Path(os.environ.get("OMATUBE_PYTHON", os.sys.executable))
-        self.resolver = AudioResolver(python, proxy=proxy)
+        self.youtube_auth = YouTubeAuth(python, config_home)
+        self.resolver = MediaResolver(
+            python,
+            proxy=proxy,
+            cookies_path=self.youtube_auth.path,
+            max_video_height=self.preferences["videoQuality"],
+        )
         self.mpv: MpvController
         self.player: Player
         self.mpris: MprisBridge | None = None
@@ -105,6 +115,7 @@ class Backend:
             "catalogRevision": self.catalog_revision,
             "collectionRevision": self.collection_revision,
             "preferences": self.preferences,
+            "youtubeAuth": self.youtube_auth.status(),
         }
 
     @staticmethod
@@ -291,7 +302,7 @@ class Backend:
                 record["state"] = "failed"
                 record["error"] = {
                     "code": "provider_error",
-                    "message": "Операция каталога завершилась ошибкой",
+                    "message": "Операция OmaTube завершилась ошибкой",
                 }
             finally:
                 record["finishedAt"] = time.time()
@@ -331,6 +342,26 @@ class Backend:
             else: await self.player.clear()
             return self.player.status()
         if command == "seek": await self.player.seek(float(request.get("seconds", 0))); return self.player.status()
+        if command == "youtube_auth_import":
+            browser = request.get("browser", "chromium")
+            if not isinstance(browser, str):
+                raise OmaTubeError("invalid_request", "Некорректный браузер")
+            return self._operation(
+                command, request,
+                lambda: self.youtube_auth.import_from_browser(browser),
+            )
+        if command == "youtube_auth_clear":
+            return await self.youtube_auth.clear()
+        if command == "video_mode":
+            value = request.get("value")
+            if not isinstance(value, str) or value not in {"audio", "tile", "floating"}:
+                raise OmaTubeError("invalid_request", "Некорректный режим видео")
+            return self._operation(command, request, lambda: self.player.set_video_mode(value))
+        if command == "video_quality":
+            value = request.get("value")
+            if type(value) is not int or value not in VIDEO_QUALITIES:
+                raise OmaTubeError("invalid_request", "Некорректное качество видео")
+            return self._operation(command, request, lambda: self._set_video_quality(value))
         if command == "volume":
             value = float(request.get("value", -1))
             if not 0 <= value <= 100: raise OmaTubeError("invalid_request", "Громкость должна быть от 0 до 100")
@@ -528,6 +559,17 @@ class Backend:
         record["task"].cancel(); await asyncio.gather(record["task"], return_exceptions=True)
         self.storage.cancel_copy(operation_id); return {"cancelled": True}
 
+    async def _set_video_quality(self, value: int) -> dict[str, Any]:
+        if self.preferences["videoQuality"] == value:
+            return self.preferences
+        self.preferences["videoQuality"] = value
+        self.resolver.max_video_height = value
+        self._save_preferences()
+        if self.player.current and self.player.video_mode != "audio":
+            await self.player.reload_current()
+        return self.preferences
+
+
     async def _setting(self, key: Any, value: Any) -> dict[str, Any]:
         if key not in DEFAULT_PREFERENCES: raise OmaTubeError("invalid_request", "Неизвестная настройка")
         if key in {"showCover", "showAuthor", "showTitle", "showControls", "showProgress", "marquee", "historyEnabled"}:
@@ -535,6 +577,10 @@ class Backend:
         elif key == "textWidth":
             if not isinstance(value, (int, float)) or not 80 <= value <= 600: raise OmaTubeError("invalid_request", "Ширина текста должна быть от 80 до 600")
             value = int(value)
+        elif key == "videoQuality":
+            if type(value) is not int or value not in VIDEO_QUALITIES:
+                raise OmaTubeError("invalid_request", "Некорректное качество видео")
+            return await self._set_video_quality(value)
         self.preferences[key] = value; self._save_preferences()
         if key == "historyEnabled": self.player.history_enabled = value
         return self.preferences

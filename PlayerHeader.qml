@@ -16,6 +16,7 @@ Item {
   readonly property var stateData: logic ? logic.stateData : ({})
   readonly property var currentEntry: stateData.current || null
   readonly property var media: currentEntry ? currentEntry.media : ({})
+  readonly property string videoMode: logic ? logic.videoMode : "audio"
   readonly property real duration: Number(stateData.duration || media.duration || 0)
   readonly property real position: seeking && pendingSeek >= 0 ? pendingSeek : Number(stateData.position || 0)
   readonly property color dim: Qt.darker(foreground, 1.5)
@@ -91,7 +92,7 @@ Item {
           width: parent.width
           textFormat: Text.PlainText
           text: root.stateData.state === "error" ? "ОШИБКА ВОСПРОИЗВЕДЕНИЯ"
-            : (root.stateData.state === "loading" ? "ПОДКЛЮЧАЕМ АУДИОПОТОК"
+            : (root.stateData.state === "loading" ? (root.videoMode === "audio" ? "ПОДКЛЮЧАЕМ АУДИОПОТОК" : "ПОДКЛЮЧАЕМ ВИДЕО")
             : (root.stateData.state === "playing" ? "СЕЙЧАС ИГРАЕТ"
             : (root.currentEntry ? "ПАУЗА" : "OMATUBE")))
           color: root.stateData.state === "loading"
@@ -183,6 +184,7 @@ Item {
       height: Style.space(48)
 
       Button {
+        id: shuffleButton
         focusable: true
         Accessible.name: tooltipText
         anchors.left: parent.left
@@ -198,6 +200,67 @@ Item {
         horizontalPadding: 0
         verticalPadding: 0
         onClicked: root.request("shuffle", { value: !root.stateData.shuffle })
+      }
+
+      Button {
+        id: videoModeToggle
+        objectName: "video-mode-toggle"
+        readonly property string modeName: root.videoMode === "tile" ? "Видео в плитке"
+          : (root.videoMode === "floating" ? "Видео поверх окон" : "Только аудио")
+        readonly property string nextMode: root.videoMode === "audio" ? "tile"
+          : (root.videoMode === "tile" ? "floating" : "audio")
+        readonly property string nextModeName: nextMode === "tile" ? "видео в плитке"
+          : (nextMode === "floating" ? "видео поверх окон" : "только аудио")
+        readonly property bool loadingVideo: Boolean(root.logic && root.logic.videoLoading)
+        anchors.left: shuffleButton.right
+        anchors.leftMargin: Style.space(4)
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(38)
+        height: Style.space(38)
+        iconText: root.videoMode === "audio" ? "󰋋"
+          : (root.videoMode === "tile" ? "󰍹" : "󰖲")
+        iconSize: Style.space(19)
+        tooltipText: modeName + "\nПереключить на " + nextModeName
+          + (root.currentEntry ? "" : "\nРежим для следующего воспроизведения")
+        selected: root.videoMode !== "audio"
+        active: selected
+        foreground: selected ? Color.accent : root.dim
+        fontFamily: root.fontFamily
+        focusable: true
+        Accessible.name: tooltipText
+        Accessible.role: Accessible.Button
+        horizontalPadding: 0
+        verticalPadding: 0
+        onClicked: if (!loadingVideo) root.request("video_mode", { value: nextMode })
+      }
+
+      Dropdown {
+        id: videoQuality
+        objectName: "video-quality"
+        visible: root.videoMode !== "audio"
+        enabled: !videoModeToggle.loadingVideo
+        opacity: enabled ? 1 : .5
+        anchors.left: videoModeToggle.right
+        anchors.leftMargin: Style.space(4)
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(78)
+        height: Style.space(38)
+        rowHeight: height
+        showLabel: false
+        value: String((root.stateData.preferences || ({})).videoQuality || 1080)
+        options: [
+          { value: "360", label: "360p" },
+          { value: "480", label: "480p" },
+          { value: "720", label: "720p" },
+          { value: "1080", label: "1080p" },
+          { value: "1440", label: "1440p" },
+          { value: "2160", label: "2160p" }
+        ]
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onChanged: function(value) {
+          root.request("video_quality", { value: Number(value) })
+        }
       }
 
       Row {
@@ -273,5 +336,6 @@ Item {
           : (root.stateData.repeat === "all" ? "one" : "off") })
       }
     }
+
   }
 }

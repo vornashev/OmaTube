@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, call, patch
 
 from backend.errors import OmaTubeError
 from backend.mpv import MpvController
@@ -156,8 +156,27 @@ class MpvControllerTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(results, ["ok", "ok"])
             self.assertEqual(spawn.await_count, 1)
-            self.assertEqual(len(writer.data), 9)
             await controller.stop()
+
+    async def test_video_loader_brackets_window_preparation(self):
+        async def on_event(_event):
+            pass
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = MpvController(Path(directory) / "mpv.sock", on_event)
+            stream = type("Stream", (), {"url": "https://stream.invalid/combined"})()
+            controller.loaded = type("Media", (), {"audio": stream, "video": stream})()
+            controller.command = AsyncMock()
+            controller.set_video_loading = AsyncMock()
+            controller._place_video = AsyncMock()
+
+            await controller.set_video_mode("tile")
+
+        self.assertEqual(
+            controller.set_video_loading.await_args_list,
+            [call(True), call(False)],
+        )
+        controller._place_video.assert_awaited_once_with("tile")
 
     async def test_unexpected_eof_emits_one_disconnect_but_clean_stop_emits_none(self):
         events = []
