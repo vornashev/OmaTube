@@ -80,7 +80,6 @@ Rectangle {
     objectName: "activationButton"
     z: 1
     anchors.fill: parent
-    anchors.rightMargin: actions.visible ? actions.width + Style.space(8) : 0
     focusable: true
     Accessible.name: String(root.media.title || root.media.videoId
       || root.item.name || "Без названия") + ", "
@@ -100,6 +99,7 @@ Rectangle {
   }
 
   Row {
+    z: 2
     anchors.fill: parent
     anchors.leftMargin: Style.space(8)
     anchors.rightMargin: Style.space(8)
