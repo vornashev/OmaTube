@@ -1,0 +1,11 @@
+{
+  "name": "omatube",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Native YouTube and YouTube Music plugin for Omarchy",
+  "license": "MIT",
+  "dependencies": {
+    "youtubei.js": "18.0.0"
+  }
+}

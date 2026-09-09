@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "vornashev.omatube",
+  "name": "OmaTube",
+  "version": "0.1.0",
+  "author": "vornashev",
+  "description": "Native YouTube and YouTube Music player with queue, collection, playlists and MPRIS",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "BarWidget.qml" },
+  "barWidget": {
+    "displayName": "OmaTube",
+    "description": "Play YouTube and YouTube Music without keeping a browser open",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

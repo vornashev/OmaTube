@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import socket
+import sys
+
+MAX_RESPONSE = 8 * 1024 * 1024
+
+
+def socket_path() -> Path:
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime:
+        print(json.dumps({"ok": False, "error": {"code": "dependency_missing", "message": "XDG_RUNTIME_DIR не задан"}}, ensure_ascii=False))
+        raise SystemExit(2)
+    return Path(runtime) / "omatube" / "backend.sock"
+
+
+def main() -> int:
+    if len(sys.argv) < 2 or sys.argv[1] not in {"status", "details", "request"}:
+        print("Usage: omatube status|details|request '<JSON>'", file=sys.stderr); return 2
+    if sys.argv[1] == "request":
+        if len(sys.argv) != 3: print("request requires one JSON object", file=sys.stderr); return 2
+        try: request = json.loads(sys.argv[2])
+        except json.JSONDecodeError: print("invalid JSON", file=sys.stderr); return 2
+    else: request = {"command": sys.argv[1]}
+    if not isinstance(request, dict): print("request must be a JSON object", file=sys.stderr); return 2
+    payload = (json.dumps(request, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+    if len(payload) > 64 * 1024: print("request too large", file=sys.stderr); return 2
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(10); client.connect(str(socket_path())); client.sendall(payload)
+            chunks = bytearray()
+            while not chunks.endswith(b"\n"):
+                chunk = client.recv(65536)
+                if not chunk: break
+                chunks.extend(chunk)
+                if len(chunks) > MAX_RESPONSE: raise RuntimeError("response too large")
+        response = json.loads(chunks)
+    except (OSError, RuntimeError, json.JSONDecodeError) as exc:
+        print(json.dumps({"ok": False, "error": {"code": "network_error", "message": f"Backend недоступен: {exc}"}}, ensure_ascii=False)); return 1
+    print(json.dumps(response, ensure_ascii=False))
+    return 0 if response.get("ok") else 1
+
+
+if __name__ == "__main__": raise SystemExit(main())

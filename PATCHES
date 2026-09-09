@@ -1,0 +1,6 @@
+youtubei.js 18.0.0 Search continuation compatibility
+
+Upstream Search parses mixed AppendContinuationItemsAction and ReloadContinuationItemsCommand arrays, but calls ObservedArray.as(ReloadContinuationItemsCommand), which rejects the normal append action before filtering the optional header slot. scripts/patch-youtubei.mjs changes that lookup to filter by node type. The patch is applied explicitly after npm ci --ignore-scripts and fails closed if upstream source changes.
+
+Upstream source as of 2026-09-07 still contains the incompatible expression:
+https://github.com/LuanRT/YouTube.js/blob/main/src/parser/youtube/Search.ts

@@ -1,0 +1,23 @@
+[Unit]
+Description=OmaTube backend for Omarchy Shell
+After=network-online.target pipewire.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/omatube/app/.venv/bin/python -m backend.main --app-root %h/.local/share/omatube/app
+WorkingDirectory=%h/.local/share/omatube/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/usr/local/bin:/usr/bin
+Restart=on-failure
+RestartSec=3
+KillMode=control-group
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=%h/.local/share/omatube/app
+ReadWritePaths=%h/.local/share/omatube %h/.config/omatube %t/omatube %t/pipewire-0
+
+[Install]
+WantedBy=default.target
