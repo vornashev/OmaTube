@@ -522,6 +522,7 @@ Item {
       Text {
         width: parent.width - Style.space(38)
           - (entityCover.visible ? entityCover.width + parent.spacing : 0)
+          - (copyEntityButton.visible ? copyEntityButton.width + parent.spacing : 0)
         anchors.verticalCenter: parent.verticalCenter
         text: String(root.entityView.entity ? root.entityView.entity.title : "Страница каталога")
         color: root.foreground
@@ -529,6 +530,24 @@ Item {
         font.pixelSize: Style.font.bodySmall
         font.bold: true
         elide: Text.ElideRight
+      }
+      Button {
+        id: copyEntityButton
+        objectName: "copyEntityButton"
+        focusable: true
+        Accessible.name: tooltipText
+        visible: Boolean(root.entityView.entity)
+          && root.entityView.entity.kind === "playlist"
+          && root.entityView.entity.source !== "local"
+        width: visible ? Style.space(32) : 0
+        height: parent.height
+        iconText: "󰆏"
+        iconSize: Style.font.icon
+        tooltipText: "Скопировать в медиатеку"
+        foreground: Color.accent
+        horizontalPadding: 0
+        verticalPadding: 0
+        onClicked: root.beginCopy(root.entityView.entity)
       }
     }
 
