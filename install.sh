@@ -9,6 +9,18 @@ APP_DIR="$APP_ROOT/app"
 UNIT_DIR="$HOME/.config/systemd/user"
 CONFIG_DIR="$HOME/.config/omatube"
 RUNTIME_DIR="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}/omatube"
+MARKER="$APP_ROOT/.installed-version"
+BACKEND_ONLY=0
+
+case "${1:-}" in
+"") ;;
+--backend-only) BACKEND_ONLY=1 ;;
+*)
+  echo "Usage: $0 [--backend-only]" >&2
+  exit 2
+  ;;
+esac
+
 
 for command in python node npm deno mpv ffmpeg ffprobe systemctl jq flock sha256sum; do
   if ! command -v "$command" >/dev/null; then
@@ -17,6 +29,8 @@ for command in python node npm deno mpv ffmpeg ffprobe systemctl jq flock sha256
     exit 1
   fi
 done
+VERSION="$(jq -er '.version' "$ROOT/manifest.json")"
+
 
 exec 9>"${XDG_RUNTIME_DIR}/omatube-install.lock"
 flock 9
@@ -54,6 +68,14 @@ fi
 systemctl --user daemon-reload
 systemctl --user enable omatube.service >/dev/null
 systemctl --user restart omatube.service
+printf '%s\n' "$VERSION" > "$MARKER"
+chmod 644 "$MARKER"
+
+if ((BACKEND_ONLY)); then
+  printf 'OmaTube backend %s installed.\n' "$VERSION"
+  exit 0
+fi
+
 if command -v omarchy-shell >/dev/null && omarchy-shell shell ping >/dev/null 2>&1; then
   omarchy-shell shell rescanPlugins >/dev/null
   omarchy plugin enable "$PLUGIN_ID" --after omarchy.clock

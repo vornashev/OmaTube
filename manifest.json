@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "vornashev.omatube",
   "name": "OmaTube",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "vornashev",
   "description": "Native YouTube and YouTube Music audio/video player with tiled and floating video, queue, collection, playlists and MPRIS",
   "kinds": ["bar-widget"],

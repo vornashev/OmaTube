@@ -37,30 +37,25 @@ omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
 
 ## Installation
 
-### Release archive
-
-Download `omatube-vX.Y.Z.tar.gz` and its checksum from the corresponding GitHub release, then run:
+Install and enable OmaTube with the standard Omarchy command:
 
 ```bash
-tar -xzf omatube-vX.Y.Z.tar.gz
-cd omatube-vX.Y.Z
-./install.sh
+omarchy plugin add https://github.com/vornashev/OmaTube.git --enable
 ```
 
-### Source checkout
+No manual clone, directory change, or `sudo` is required. On first load, the
+plugin automatically creates its Python environment, installs Node.js
+dependencies, configures the `omatube` CLI and systemd user service, and starts
+the backend.
+
+The installer places files in
+`~/.config/omarchy/plugins/vornashev.omatube` and application data in
+`~/.local/share/omatube`.
+
+To update later:
 
 ```bash
-git clone https://github.com/vornashev/OmaTube.git
-cd OmaTube
-./install.sh
-```
-
-The installer copies the widget to `~/.config/omarchy/plugins/vornashev.omatube`, creates the backend environment under `~/.local/share/omatube`, installs the `omatube` command, and enables the user service.
-
-If Omarchy Shell is not running during installation, enable the widget after login:
-
-```bash
-omarchy plugin enable vornashev.omatube --after omarchy.clock
+omarchy plugin update vornashev.omatube
 ```
 
 ## Usage
@@ -152,30 +147,25 @@ omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
 
 ### Установка
 
-#### Архив релиза
-
-Скачайте `omatube-vX.Y.Z.tar.gz` и файл контрольной суммы из соответствующего GitHub Release, затем выполните:
+Установите и сразу включите OmaTube стандартной командой Omarchy:
 
 ```bash
-tar -xzf omatube-vX.Y.Z.tar.gz
-cd omatube-vX.Y.Z
-./install.sh
+omarchy plugin add https://github.com/vornashev/OmaTube.git --enable
 ```
 
-#### Исходный код
+Ручной `git clone`, переход в каталог и `sudo` не нужны. При первой загрузке
+плагин автоматически создаст Python-окружение, установит зависимости Node.js,
+настроит CLI `omatube` и пользовательский сервис systemd, затем запустит
+бэкенд.
+
+Файлы плагина размещаются в
+`~/.config/omarchy/plugins/vornashev.omatube`, данные приложения — в
+`~/.local/share/omatube`.
+
+Для последующего обновления:
 
 ```bash
-git clone https://github.com/vornashev/OmaTube.git
-cd OmaTube
-./install.sh
-```
-
-Установщик копирует виджет в `~/.config/omarchy/plugins/vornashev.omatube`, создаёт окружение бэкенда в `~/.local/share/omatube`, устанавливает команду `omatube` и включает пользовательский сервис.
-
-Если Omarchy Shell не был запущен во время установки, включите виджет после входа в систему:
-
-```bash
-omarchy plugin enable vornashev.omatube --after omarchy.clock
+omarchy plugin update vornashev.omatube
 ```
 
 ### Использование

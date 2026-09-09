@@ -6,6 +6,13 @@ All notable changes to OmaTube are documented in this file. Versions follow [Sem
 
 [Русская версия](#русский)
 
+## [0.1.1] - 2026-09-09
+
+### Added
+
+- One-command installation and enablement through `omarchy plugin add`.
+- Automatic first-load backend setup and version-aware service startup.
+
 ## [0.1.0] - 2026-09-09
 
 ### Added
@@ -36,6 +43,13 @@ All notable changes to OmaTube are documented in this file. Versions follow [Sem
 
 [English version](#changelog)
 
+## [0.1.1] - 2026-09-09
+
+### Добавлено
+
+- Установка и включение одной командой `omarchy plugin add`.
+- Автоматическая настройка бэкенда при первой загрузке и запуск сервиса с проверкой версии.
+
 ## [0.1.0] - 2026-09-09
 
 ### Добавлено
@@ -57,5 +71,7 @@ All notable changes to OmaTube are documented in this file. Versions follow [Sem
 - Область наведения строки медиа включает кнопки действий; в деталях поиска доступно копирование плейлиста.
 - Заголовок проигрывателя и панель показывают режим видео, качество, состояние авторизации и настройки содержимого виджета.
 - Разрешение потоков поддерживает авторизационные cookies, раздельные аудио- и видеодорожки и ограничение выбранного качества.
+
+[0.1.1]: https://github.com/vornashev/OmaTube/releases/tag/v0.1.1
 
 [0.1.0]: https://github.com/vornashev/OmaTube/releases/tag/v0.1.0
