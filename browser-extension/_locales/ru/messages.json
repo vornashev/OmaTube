@@ -1,0 +1,311 @@
+{
+  "extName": {
+    "message": "OmaTube — смотреть в плеере Omarchy"
+  },
+  "extDescription": {
+    "message": "Кнопка «Смотреть в OmaTube» на YouTube: переносит видео с текущего места в плагин OmaTube для Omarchy."
+  },
+  "actionTitle": {
+    "message": "OmaTube"
+  },
+  "commandSend": {
+    "message": "Отправить текущее видео в OmaTube"
+  },
+  "btnWatch": {
+    "message": "Смотреть в OmaTube"
+  },
+  "btnMore": {
+    "message": "Ещё варианты OmaTube"
+  },
+  "menuNow": {
+    "message": "Смотреть сейчас"
+  },
+  "menuNext": {
+    "message": "Следующим"
+  },
+  "menuEnd": {
+    "message": "В конец очереди"
+  },
+  "toastSending": {
+    "message": "Отправляю в OmaTube…"
+  },
+  "toastSentAt": {
+    "message": "Продолжаю в OmaTube с $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "toastSent": {
+    "message": "Отправлено в OmaTube"
+  },
+  "toastQueuedNext": {
+    "message": "Будет следующим в OmaTube"
+  },
+  "toastQueuedEnd": {
+    "message": "Добавлено в очередь OmaTube"
+  },
+  "toastRetry": {
+    "message": "Повторить"
+  },
+  "toastNoVideo": {
+    "message": "Не нашёл видео на этой странице"
+  },
+  "errHostMissing": {
+    "message": "Связка с OmaTube не установлена. Выполните в терминале: omatube browser-setup"
+  },
+  "errHostForbidden": {
+    "message": "OmaTube не узнал это расширение. Выполните: omatube browser-setup"
+  },
+  "errHostCrashed": {
+    "message": "Связка с OmaTube завершилась с ошибкой"
+  },
+  "errBackendDown": {
+    "message": "Сервис OmaTube не запущен"
+  },
+  "errDisabled": {
+    "message": "Приём видео из браузера выключен в настройках OmaTube"
+  },
+  "errGeneric": {
+    "message": "Не удалось отправить: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "ctxLink": {
+    "message": "Смотреть в OmaTube"
+  },
+  "popupChecking": {
+    "message": "Проверяю связь…"
+  },
+  "popupOk": {
+    "message": "Подключено к OmaTube"
+  },
+  "popupOkVia": {
+    "message": "Подключено через $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popupDown": {
+    "message": "OmaTube не запущен — запустится при отправке"
+  },
+  "popupDisabled": {
+    "message": "Приём выключен в настройках OmaTube"
+  },
+  "popupMissing": {
+    "message": "Связка не установлена"
+  },
+  "popupSetupHint": {
+    "message": "Выполните в терминале:"
+  },
+  "popupNowPlaying": {
+    "message": "Сейчас в OmaTube"
+  },
+  "popupNothing": {
+    "message": "Ничего не играет"
+  },
+  "popupNoTab": {
+    "message": "Откройте видео на YouTube, чтобы отправить его"
+  },
+  "popupSettings": {
+    "message": "Настройки"
+  },
+  "popupVersionMismatch": {
+    "message": "Версии расширения ($P1$) и OmaTube ($P2$) различаются. Перезагрузите расширение в настройках расширений браузера.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popupLastError": {
+    "message": "Последняя ошибка"
+  },
+  "optTitle": {
+    "message": "OmaTube — настройки расширения"
+  },
+  "optTransfer": {
+    "message": "Перенос"
+  },
+  "optDefaultAction": {
+    "message": "Действие основной кнопки"
+  },
+  "optAfter": {
+    "message": "После переноса"
+  },
+  "optAfterClose": {
+    "message": "Закрыть вкладку"
+  },
+  "optAfterPause": {
+    "message": "Поставить на паузу и оставить вкладку"
+  },
+  "optRewind": {
+    "message": "Отмотать назад перед продолжением"
+  },
+  "optRewindHint": {
+    "message": "Чтобы не пропустить пару секунд, пока OmaTube загружает поток."
+  },
+  "optNone": {
+    "message": "Нет"
+  },
+  "optSeconds": {
+    "message": "$P1$ с",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "optButton": {
+    "message": "Кнопка"
+  },
+  "optPlacement": {
+    "message": "Где показывать на странице видео"
+  },
+  "optPlacementActions": {
+    "message": "Под видео"
+  },
+  "optPlacementPlayer": {
+    "message": "В панели плеера"
+  },
+  "optPlacementBoth": {
+    "message": "В обоих местах"
+  },
+  "optShorts": {
+    "message": "Показывать на Shorts"
+  },
+  "optMusic": {
+    "message": "Показывать на YouTube Music"
+  },
+  "optContextMenu": {
+    "message": "Пункт «Смотреть в OmaTube» в меню ссылок"
+  },
+  "optShortcut": {
+    "message": "Горячая клавиша"
+  },
+  "optShortcutCurrent": {
+    "message": "Сейчас: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "optShortcutNone": {
+    "message": "не назначена"
+  },
+  "optShortcutChange": {
+    "message": "Изменить"
+  },
+  "optConnection": {
+    "message": "Связь с OmaTube"
+  },
+  "optCheck": {
+    "message": "Проверить связь"
+  },
+  "optPluginHint": {
+    "message": "Режим видео для перенесённых роликов и уведомления настраиваются в OmaTube → Настройки → Браузер."
+  },
+  "thumbQueue": {
+    "message": "В очередь OmaTube (правый клик — ещё варианты)"
+  },
+  "optThumbnails": {
+    "message": "Кнопка «В очередь OmaTube» на превью видео"
+  },
+  "optThumbnailsHint": {
+    "message": "Появляется в углу превью при наведении. Клик — в конец «Моей очереди», правый клик — «Смотреть сейчас» или «Следующим». Вкладка не закрывается."
+  },
+  "optSaved": {
+    "message": "Сохранено"
+  },
+  "btnQueued": {
+    "message": "В очереди · $P1$-й",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "markNow": {
+    "message": "Играет"
+  },
+  "markNext": {
+    "message": "Следующий"
+  },
+  "markTip": {
+    "message": "$P1$-й из $P2$ в очереди OmaTube",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "markEta": {
+    "message": "начнётся через ~$P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "markRemove": {
+    "message": "клик — убрать из очереди"
+  },
+  "toastRemoved": {
+    "message": "Убрано из очереди OmaTube"
+  },
+  "toastQueuedAt": {
+    "message": "Добавлено в очередь · $P1$-е из $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "unitMin": {
+    "message": "мин"
+  },
+  "menuNextMove": {
+    "message": "Следующим · переместить"
+  },
+  "menuEndHere": {
+    "message": "В конец очереди · сейчас $P1$-й",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "menuRemove": {
+    "message": "Убрать из очереди"
+  },
+  "toastMovedTo": {
+    "message": "Перемещено в очереди · $P1$-е из $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "toastAlreadyThere": {
+    "message": "Уже на этом месте в очереди"
+  }
+}

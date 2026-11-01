@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
+import shutil
+import sqlite3
 from pathlib import Path
 import signal
 import stat
@@ -57,6 +60,84 @@ def filter_youtube_cookies(content: str) -> tuple[str, int, bool]:
     return filtered, len(rows), authenticated
 
 
+CHROMIUM_DIR = Path.home() / ".config" / "chromium"
+CHROMIUM_EPOCH = 11644473600
+
+
+def chromium_safe_storage_key() -> bytes:
+    """AES key from the keyring item that belongs to Chromium itself.
+
+    Other Chromium-based apps (VS Code, Electron apps) also store a "Chromium Safe Storage"
+    item; yt-dlp takes the first one by label and may pick the wrong secret.
+    """
+    import secretstorage
+    connection = secretstorage.dbus_init()
+    try:
+        collection = secretstorage.get_default_collection(connection)
+        if collection.is_locked(): collection.unlock()
+        items = list(collection.search_items({"application": "chromium"}))
+        if not items: raise OmaTubeError("auth_import_error", "В связке ключей нет пароля Chromium")
+        password = items[0].get_secret()
+    finally:
+        connection.close()
+    return hashlib.pbkdf2_hmac("sha1", password, b"saltysalt", 1, 16)
+
+
+def decrypt_chromium_value(blob: bytes, key: bytes, host_key: str, strip_hash: bool) -> str | None:
+    from Cryptodome.Cipher import AES
+    if not blob: return ""
+    if blob[:3] not in (b"v10", b"v11"): return blob.decode("utf-8", "replace")
+    data = blob[3:]
+    if not data or len(data) % 16: return None
+    try:
+        plain = AES.new(key, AES.MODE_CBC, b" " * 16).decrypt(data)
+        plain = plain[:-plain[-1]]
+        if strip_hash:
+            if plain[:32] != hashlib.sha256(host_key.encode()).digest(): return None
+            plain = plain[32:]
+        return plain.decode("utf-8")
+    except (ValueError, UnicodeDecodeError, IndexError):
+        return None
+
+
+def read_chromium_cookies(profile: Path, key: bytes) -> list[str]:
+    source = profile / "Cookies"
+    if not source.exists(): source = profile / "Network" / "Cookies"
+    if not source.exists(): return []
+    with tempfile.TemporaryDirectory(prefix="omatube-cookies-") as temp:
+        copy = Path(temp) / "Cookies"
+        shutil.copy2(source, copy)
+        db = sqlite3.connect(copy)
+        try:
+            row = db.execute("SELECT value FROM meta WHERE key='version'").fetchone()
+            strip_hash = bool(row and int(row[0]) >= 24)
+            rows = db.execute("SELECT host_key,path,is_secure,expires_utc,name,value,encrypted_value,is_httponly FROM cookies "
+                              "WHERE host_key LIKE '%youtube.com'").fetchall()
+        finally:
+            db.close()
+    lines = ["# Netscape HTTP Cookie File"]
+    for host, path, secure, expires, name, value, encrypted, httponly in rows:
+        if encrypted:
+            value = decrypt_chromium_value(bytes(encrypted), key, host, strip_hash)
+            if value is None: continue
+        expiry = max(0, int(expires / 1_000_000 - CHROMIUM_EPOCH)) if expires else 0
+        lines.append("\t".join([("#HttpOnly_" if httponly else "") + host, "TRUE" if host.startswith(".") else "FALSE", path,
+                                "TRUE" if secure else "FALSE", str(expiry), name, value]))
+    return lines
+
+
+def import_chromium_profiles(root: Path = CHROMIUM_DIR, key: bytes | None = None) -> str:
+    key = key or chromium_safe_storage_key()
+    best, best_score = "", -1
+    for profile in sorted([root / "Default", *root.glob("Profile *")]):
+        lines = read_chromium_cookies(profile, key)
+        content = "\n".join(lines) + "\n"
+        _, count, authenticated = filter_youtube_cookies(content)
+        score = count + (10_000 if authenticated else 0)
+        if score > best_score: best, best_score = content, score
+    return best
+
+
 class YouTubeAuth:
     def __init__(self, python: str | Path, config_dir: Path) -> None:
         self.python = str(python)
@@ -99,6 +180,26 @@ class YouTubeAuth:
     async def import_from_browser(self, browser: str) -> dict[str, Any]:
         if browser not in SUPPORTED_BROWSERS:
             raise OmaTubeError("invalid_request", "Неподдерживаемый браузер")
+        try:
+            content = await asyncio.to_thread(import_chromium_profiles)
+            filtered, count, authenticated = filter_youtube_cookies(content)
+            if count and authenticated:
+                self._write(filtered)
+                return self.status()
+        except Exception:
+            pass
+        return await self._import_with_ytdlp(browser)
+
+    def _write(self, filtered: str) -> None:
+        descriptor, name = tempfile.mkstemp(prefix=".youtube-cookies-", suffix=".tmp", dir=self.path.parent)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle: handle.write(filtered)
+            os.chmod(name, 0o600)
+            os.replace(name, self.path)
+        finally:
+            Path(name).unlink(missing_ok=True)
+
+    async def _import_with_ytdlp(self, browser: str) -> dict[str, Any]:
         descriptor, temporary_name = tempfile.mkstemp(prefix=".youtube-cookies-", suffix=".tmp", dir=self.path.parent)
         os.close(descriptor)
         temporary = Path(temporary_name)

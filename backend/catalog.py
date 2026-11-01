@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+import time
+
 from .errors import OmaTubeError
+from .net import NetStats
 
 MAX_LINE = 8 * 1024 * 1024
 RETRY_DELAYS = (0.6, 1.2, 2.4)
@@ -18,6 +21,7 @@ class CatalogBridge:
         self.worker = worker
         self.node = node
         self.proxy = proxy
+        self.stats = NetStats()
         self.process: asyncio.subprocess.Process | None = None
         self.reader_task: asyncio.Task[None] | None = None
         self.pending: dict[
@@ -250,7 +254,22 @@ class CatalogBridge:
         params: dict[str, Any],
         timeout: float = 45,
     ) -> dict[str, Any]:
-        retryable = method in {"search", "suggestions", "ping"}
+        started = time.monotonic()
+        try:
+            result = await self._request_with_retries(method, params, timeout)
+        except OmaTubeError as error:
+            if error.code in {"network_error", "provider_error"} and method != "ping": self.stats.record(time.monotonic() - started, False)
+            raise
+        if method not in {"ping", "release"}: self.stats.record(time.monotonic() - started, True)
+        return result
+
+    async def _request_with_retries(
+        self,
+        method: str,
+        params: dict[str, Any],
+        timeout: float,
+    ) -> dict[str, Any]:
+        retryable = method in {"search", "suggestions", "ping", "open", "channel_section", "comments", "related"}
         try:
             async with asyncio.timeout(timeout):
                 for attempt in range(len(RETRY_DELAYS) + 1):

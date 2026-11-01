@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui
+import "i18n.js" as L
 
 Item {
   id: root
@@ -31,14 +32,15 @@ Item {
   signal playlistRequested(string playlistId)
   signal mediaPickerRequested(var media)
   signal entityRequested(var entity)
+  signal downloadsRequested()
 
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property var sections: [
-    { id: "saved", label: "СОХРАНЕНО" },
-    { id: "playlists", label: "СПИСКИ" },
+    { id: "saved", label: L.tr("СОХРАНЕНО") },
+    { id: "playlists", label: L.tr("ПЛЕЙЛИСТЫ") },
     { id: "bookmarks", label: "YOUTUBE" },
-    { id: "authors", label: "АВТОРЫ" },
-    { id: "history", label: "ИСТОРИЯ" }
+    { id: "authors", label: L.tr("АВТОРЫ") },
+    { id: "history", label: L.tr("ИСТОРИЯ") }
   ]
 
   function load(preserveExisting) {
@@ -93,7 +95,7 @@ Item {
 
   function beginCopy(entity) {
     copyEntity = entity
-    copyName.text = String(entity.title || "Плейлист") + " — копия"
+    copyName.text = String(entity.title || L.tr("Плейлист")) + L.tr(" — копия")
     copyDialog.open()
   }
 
@@ -125,7 +127,7 @@ Item {
           root.nextOffset = result.nextOffset === undefined ? null : result.nextOffset
           root.loadError = ""
         } else {
-          root.loadError = root.logic.statusError || "Не удалось загрузить медиатеку"
+          root.loadError = root.logic.statusError || L.tr("Не удалось загрузить медиатеку")
         }
         root.finishRequest()
       } else if (command === "collection"
@@ -140,7 +142,7 @@ Item {
           root.nextOffset = result.nextOffset === undefined ? null : result.nextOffset
           root.moreError = ""
         } else {
-          root.moreError = root.logic.statusError || "Не удалось загрузить следующую страницу"
+          root.moreError = root.logic.statusError || L.tr("Не удалось загрузить следующую страницу")
         }
         root.finishRequest()
       } else if (result && (
@@ -173,67 +175,84 @@ Item {
 
   Column {
     anchors.fill: parent
-    spacing: Style.space(6)
+    spacing: Style.space(14)
 
-    Flickable {
+    Item {
       width: parent.width
-      height: Style.space(32)
-      contentWidth: sectionTabs.width
-      contentHeight: height
-      clip: true
-      boundsBehavior: Flickable.StopAtBounds
-      Row {
-        id: sectionTabs
+      height: Style.space(35)
+
+      TabStrip {
+        anchors.left: parent.left
+        anchors.right: downloadsButton.left
         height: parent.height
-        spacing: Style.space(3)
-        Repeater {
-          model: root.sections
-          delegate: Button {
-            focusable: true
-            Accessible.name: text
-            required property var modelData
-            height: sectionTabs.height
-            text: modelData.label
-            foreground: root.section === modelData.id ? Color.accent : root.dim
-            bordered: root.section === modelData.id
-            horizontalPadding: Style.space(8)
-            verticalPadding: 0
-            onClicked: root.section = modelData.id
-          }
-        }
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        current: root.section
+        tabs: root.sections.map(function(row) { return { label: row.label, value: row.id } })
+        onSelected: value => root.section = value
+      }
+
+      IconButton {
+        id: downloadsButton
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: Style.space(32)
+        height: Style.space(32)
+        icon: "download"
+        iconSize: 14
+        tooltipText: L.tr("Загрузки")
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onClicked: root.downloadsRequested()
       }
     }
 
-    Row {
+    Rectangle {
       visible: root.section === "playlists"
       width: parent.width
       height: visible ? Style.space(34) : 0
-      spacing: Style.space(4)
-      TextField {
-        id: playlistName
-        width: parent.width - createPlaylist.width - parent.spacing
-        height: parent.height
-        placeholderText: "Новый локальный плейлист"
-        font.family: root.fontFamily
-        onAccepted: createPlaylist.clicked()
-      }
-      Button {
-        focusable: true
-        Accessible.name: tooltipText
-        id: createPlaylist
-        width: Style.space(34)
-        height: parent.height
-        iconText: "󰐕"
-        tooltipText: "Создать плейлист"
-        foreground: Color.accent
-        bordered: true
-        enabled: playlistName.text.trim() !== ""
-        opacity: enabled ? 1 : .4
-        horizontalPadding: 0
-        verticalPadding: 0
-        onClicked: {
-          root.logic.request("playlist_create", { name: playlistName.text })
-          playlistName.clear()
+      color: "transparent"
+      border.width: Math.max(1, Style.space(1))
+      border.color: playlistName.activeFocus ? Color.accent : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1)
+      Row {
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(12)
+        anchors.rightMargin: Style.space(6)
+        spacing: Style.space(10)
+        Icon { anchors.verticalCenter: parent.verticalCenter; name: "list-plus"; size: Style.space(14); color: root.dim }
+        TextInput {
+          id: playlistName
+          width: parent.width - Style.space(24) - createPlaylist.width - parent.spacing * 2
+          anchors.verticalCenter: parent.verticalCenter
+          color: root.foreground
+          selectionColor: Color.accent
+          font.family: root.fontFamily
+          font.pixelSize: Style.space(12)
+          clip: true
+          selectByMouse: true
+          onAccepted: if (text.trim() !== "") createPlaylist.clicked()
+          Text {
+            visible: playlistName.text === ""
+            anchors.fill: parent
+            verticalAlignment: Text.AlignVCenter
+            text: L.tr("Новый локальный плейлист")
+            color: root.dim
+            font: playlistName.font
+          }
+        }
+        IconButton {
+          id: createPlaylist
+          anchors.verticalCenter: parent.verticalCenter
+          icon: "plus"
+          iconSize: 14
+          tooltipText: L.tr("Создать плейлист")
+          enabled: playlistName.text.trim() !== ""
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: {
+            root.logic.request("playlist_create", { name: playlistName.text })
+            playlistName.clear()
+          }
         }
       }
     }
@@ -248,22 +267,20 @@ Item {
           + (root.items.length > 0 ? "  ·  " + root.items.length : "")
         color: root.dim
         font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
+        font.pixelSize: Style.space(10)
         font.bold: true
-        font.letterSpacing: .8
+        font.letterSpacing: 1.5
       }
-      Button {
-        focusable: true
-        Accessible.name: tooltipText
+      IconButton {
         id: clearHistory
         visible: root.section === "history" && root.items.length > 0
         width: visible ? Style.space(28) : 0
         height: Style.space(28)
-        iconText: "󰆴"
-        tooltipText: "Очистить историю"
-        foreground: root.dim
-        horizontalPadding: 0
-        verticalPadding: 0
+        icon: "trash-2"
+        iconSize: 14
+        tooltipText: L.tr("Очистить историю")
+        foreground: root.foreground
+        fontFamily: root.fontFamily
         onClicked: clearHistoryDialog.open()
       }
     }
@@ -293,14 +310,14 @@ Item {
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
         }
-        Button {
-          focusable: true
-          Accessible.name: text
+        Pill {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: "Повторить"
-          iconText: "󰑐"
-          foreground: Color.accent
-          bordered: true
+          height: Style.space(31)
+          text: L.tr("ПОВТОРИТЬ")
+          icon: "rotate-cw"
+          selected: true
+          foreground: root.foreground
+          fontFamily: root.fontFamily
           onClicked: root.load(false)
         }
       }
@@ -310,17 +327,11 @@ Item {
         anchors.centerIn: parent
         width: parent.width - Style.space(32)
         spacing: Style.space(6)
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          text: "󰋼"
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.space(25)
-        }
+        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "info"; size: Style.space(26); color: root.dim }
         Text {
           width: parent.width
-          text: root.section === "playlists" ? "Создайте первый локальный плейлист"
-            : "В этом разделе пока ничего нет"
+          text: root.section === "playlists" ? L.tr("Создайте первый локальный плейлист")
+            : L.tr("В этом разделе пока ничего нет")
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
@@ -338,6 +349,7 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         spacing: Style.space(2)
         delegate: MediaRow {
+          logic: root.logic
           onFocusRequested: collectionList.positionViewAtIndex(index, ListView.Contain)
           required property var modelData
           required property int index
@@ -347,7 +359,7 @@ Item {
           foreground: root.foreground
           fontFamily: root.fontFamily
           allowSave: root.section !== "playlists"
-          saveTooltip: "Убрать из медиатеки"
+          saveTooltip: L.tr("Убрать из медиатеки")
           onPlayRequested: row => root.logic.request("play_url", { url: (row.media || row).canonicalUrl })
           onNextRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "next" })
           onEndRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
@@ -368,9 +380,9 @@ Item {
             || root.moreError !== "" || (root.loadError !== "" && root.items.length > 0)
           width: collectionList.width
           height: visible ? Style.space(38) : 0
-          text: root.loadingMore ? "Загружаем…"
+          text: root.loadingMore ? L.tr("Загружаем…")
             : (root.moreError !== "" || root.loadError !== ""
-              ? "Повторить загрузку" : "Загрузить ещё")
+              ? L.tr("Повторить загрузку") : L.tr("Загрузить ещё"))
           foreground: Color.accent
           enabled: !root.loadingMore && !root.morePending
           onClicked: {
@@ -401,18 +413,18 @@ Item {
 
   Dialog {
     id: copyDialog
-    title: "Создать локальную копию"
+    title: L.tr("Создать локальную копию")
     modal: true
     width: Style.space(360)
     standardButtons: Dialog.Ok | Dialog.Cancel
-    contentItem: TextField { id: copyName; placeholderText: "Название локального плейлиста" }
+    contentItem: TextField { id: copyName; placeholderText: L.tr("Название локального плейлиста") }
     onAccepted: if (root.copyEntity)
       root.logic.request("playlist_copy", { entity: root.copyEntity, name: copyName.text })
   }
 
   Dialog {
     id: clearHistoryDialog
-    title: "Очистить всю историю прослушивания?"
+    title: L.tr("Очистить всю историю прослушивания?")
     modal: true
     width: Style.space(360)
     standardButtons: Dialog.Yes | Dialog.No

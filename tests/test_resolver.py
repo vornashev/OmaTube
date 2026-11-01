@@ -82,5 +82,104 @@ class ResolverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(argv[argv.index("--cookies") + 1], str(cookies))
 
 
+class StoryboardTests(unittest.TestCase):
+    def test_prefers_160px_sheet_and_computes_frame_interval(self):
+        from backend.resolver import parse_storyboard
+        sheet = lambda fid, width, rows: {"format_id": fid, "rows": rows, "columns": rows, "width": width, "height": width * 9 // 16,
+                                          "fragments": [{"url": f"https://i.ytimg.com/sb/x/{fid}.jpg", "duration": 50.0}]}
+        result = parse_storyboard([sheet("sb3", 48, 10), sheet("sb1", 160, 5), sheet("sb0", 320, 3), {"format_id": "251"}])
+        self.assertEqual(result["width"], 160)
+        self.assertEqual(result["interval"], 2.0)
+        self.assertIsNone(parse_storyboard([{"format_id": "sb1", "rows": 5, "columns": 5, "width": 160, "height": 90,
+                                             "fragments": [{"url": "https://evil.invalid/x.jpg", "duration": 50}]}]))
+        self.assertIsNone(parse_storyboard("NA"))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class HedgedResolveTests(unittest.IsolatedAsyncioTestCase):
+    async def test_second_attempt_wins_when_first_hangs(self):
+        from backend.resolver import ResolvedMedia, ResolvedStream
+        resolver = MediaResolver("python")
+        resolver.hedge_delays = (0.05, 0.05, 0.0)
+        calls = []
+        cancelled = []
+
+        async def fake(video_id, skip_hls):
+            calls.append(len(calls))
+            index = len(calls) - 1
+            try:
+                if index == 0:
+                    await asyncio.Future()
+                return ResolvedMedia(ResolvedStream(f"https://stream.invalid/{index}", {}), 10, True)
+            except asyncio.CancelledError:
+                cancelled.append(index)
+                raise
+
+        resolver._resolve = fake
+        media = await resolver.resolve("AAAAAA1")
+        self.assertEqual(media.audio.url, "https://stream.invalid/1")
+        self.assertEqual(cancelled, [0])
+
+    async def test_unavailable_error_stops_hedging(self):
+        from backend.errors import OmaTubeError
+        resolver = MediaResolver("python")
+        resolver.hedge_delays = (0.05, 0.05, 0.0)
+        calls = []
+
+        async def fake(video_id, skip_hls):
+            calls.append(skip_hls)
+            raise OmaTubeError("unavailable", "Видео недоступно")
+
+        resolver._resolve = fake
+        with self.assertRaises(OmaTubeError):
+            await resolver.resolve("AAAAAA1")
+        self.assertEqual(calls, [True, False])
+
+
+class ResolveCacheTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cache_and_prefetch_share_one_extractor_run(self):
+        from backend.resolver import ResolvedMedia, ResolvedStream
+        resolver = MediaResolver("python")
+        calls = []
+
+        async def fake(video_id):
+            calls.append(video_id)
+            await asyncio.sleep(0.02)
+            return ResolvedMedia(ResolvedStream(f"https://stream.invalid/{video_id}", {}), 10, True)
+
+        resolver._resolve_uncached = fake
+        resolver.prefetch("AAAAAA1")
+        first = await resolver.resolve("AAAAAA1")
+        second = await resolver.resolve("AAAAAA1")
+        self.assertIs(first, second)
+        self.assertEqual(calls, ["AAAAAA1"])
+        resolver.max_video_height = 720
+        await resolver.resolve("AAAAAA1")
+        self.assertEqual(calls, ["AAAAAA1", "AAAAAA1"])
+
+    async def test_cancelled_waiter_stops_its_run_but_idle_prefetch_keeps_running(self):
+        resolver = MediaResolver("python")
+        cancelled = []
+
+        async def fake(video_id):
+            try:
+                await asyncio.Future()
+            except asyncio.CancelledError:
+                cancelled.append(video_id)
+                raise
+
+        resolver._resolve_uncached = fake
+        waiter = asyncio.create_task(resolver.resolve("AAAAAA1"))
+        await asyncio.sleep(0.01)
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        await asyncio.sleep(0.01)
+        self.assertEqual(cancelled, ["AAAAAA1"])
+        resolver.prefetch("BBBBBB2")
+        await asyncio.sleep(0.01)
+        self.assertEqual(cancelled, ["AAAAAA1"])
+        for task in list(resolver._inflight.values()):
+            task.cancel()

@@ -30,21 +30,33 @@ for command in python node npm deno mpv ffmpeg ffprobe systemctl jq flock sha256
   fi
 done
 VERSION="$(jq -er '.version' "$ROOT/manifest.json")"
+EXTENSION_VERSION="$(jq -er '.version' "$ROOT/browser-extension/manifest.json")"
+if [[ "$EXTENSION_VERSION" != "$VERSION" ]]; then
+  echo "browser-extension/manifest.json version $EXTENSION_VERSION does not match plugin version $VERSION" >&2
+  exit 1
+fi
 
 
 exec 9>"${XDG_RUNTIME_DIR}/omatube-install.lock"
 flock 9
-mkdir -p "$PLUGIN_DIR/backend" "$PLUGIN_DIR/catalog" "$PLUGIN_DIR/scripts" "$PLUGIN_DIR/bin" "$PLUGIN_DIR/systemd" "$APP_DIR/backend" "$APP_DIR/catalog" "$APP_DIR/scripts" "$APP_ROOT" "$CONFIG_DIR" "$RUNTIME_DIR" "$HOME/.local/bin" "$UNIT_DIR"
+mkdir -p "$PLUGIN_DIR/backend" "$PLUGIN_DIR/catalog" "$PLUGIN_DIR/scripts" "$PLUGIN_DIR/bin" "$PLUGIN_DIR/systemd" "$APP_DIR/backend" "$APP_DIR/catalog" "$APP_DIR/scripts" "$APP_DIR/bin" "$APP_ROOT" "$CONFIG_DIR" "$RUNTIME_DIR" "$HOME/.local/bin" "$UNIT_DIR"
 chmod 700 "$APP_ROOT" "$CONFIG_DIR" "$RUNTIME_DIR"
+mkdir -p "$HOME/Videos/OmaTube"
 
 if [[ "$(realpath "$ROOT")" != "$(realpath "$PLUGIN_DIR")" ]]; then
-  QML=(CatalogImage.qml SkeletonList.qml MediaRow.qml PlayerHeader.qml NowPage.qml SearchPage.qml CollectionPage.qml PlaylistPage.qml Panel.qml WidgetLogic.qml BarPlayer.qml BarWidget.qml manifest.json bootstrap.sh install.sh uninstall.sh requirements.lock package.json package-lock.json PATCHES LICENSE)
+  QML=(CatalogImage.qml QueueMark.qml SkeletonList.qml RowMenu.qml MediaRow.qml QueueRow.qml MediaCard.qml PlayerHeader.qml PlayerCard.qml ChannelPage.qml Segmented.qml ToggleRow.qml PlaylistTableRow.qml SubscriptionsPage.qml HomePage.qml HistoryPage.qml StatsPage.qml SessionsDialog.qml Icon.qml Pill.qml IconButton.qml TabStrip.qml LyricsPane.qml CommentsPane.qml DownloadsPage.qml SkipToast.qml Equalizer.qml Toast.qml Timeline.qml PlayerBar.qml ThinPlayer.qml PlayerSheet.qml PlaylistPicker.qml MiniPlayer.qml PlaybackPopover.qml ShelfPanel.qml QueuePane.qml Rail.qml SettingsPage.qml OnboardingPage.qml NowPage.qml SearchPage.qml CollectionPage.qml PlaylistPage.qml Panel.qml WidgetLogic.qml BarPlayer.qml BarWidget.qml i18n.js manifest.json bootstrap.sh install.sh uninstall.sh requirements.lock package.json package-lock.json PATCHES LICENSE)
   for file in "${QML[@]}"; do install -C -m 644 "$ROOT/$file" "$PLUGIN_DIR/$file"; done
   chmod 755 "$PLUGIN_DIR/bootstrap.sh" "$PLUGIN_DIR/install.sh" "$PLUGIN_DIR/uninstall.sh"
+  mkdir -p "$PLUGIN_DIR/icons"
+  for file in "$ROOT"/icons/*.svg; do install -C -m 644 "$file" "$PLUGIN_DIR/icons/$(basename "$file")"; done
   for file in "$ROOT"/backend/*.py "$ROOT"/backend/*.lua; do install -m 644 "$file" "$PLUGIN_DIR/backend/$(basename "$file")"; done
   install -m 755 "$ROOT/catalog/worker.mjs" "$PLUGIN_DIR/catalog/worker.mjs"
   install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$PLUGIN_DIR/scripts/patch-youtubei.mjs"
+  install -m 755 "$ROOT/scripts/build-firefox-extension.sh" "$PLUGIN_DIR/scripts/build-firefox-extension.sh"
   install -m 755 "$ROOT/bin/omatube" "$PLUGIN_DIR/bin/omatube"
+  install -m 755 "$ROOT/bin/omatube-native-host" "$PLUGIN_DIR/bin/omatube-native-host"
+  rm -rf "$PLUGIN_DIR/browser-extension"
+  cp -R "$ROOT/browser-extension" "$PLUGIN_DIR/browser-extension"
   install -m 644 "$ROOT/systemd/omatube.service" "$PLUGIN_DIR/systemd/omatube.service"
 fi
 
@@ -53,6 +65,14 @@ install -m 755 "$ROOT/catalog/worker.mjs" "$APP_DIR/catalog/worker.mjs"
 install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$APP_DIR/scripts/patch-youtubei.mjs"
 install -m 644 "$ROOT/requirements.lock" "$ROOT/package.json" "$ROOT/package-lock.json" "$APP_DIR/"
 install -m 755 "$ROOT/bin/omatube" "$HOME/.local/bin/omatube"
+install -m 755 "$ROOT/bin/omatube-native-host" "$APP_DIR/bin/omatube-native-host"
+# Stable path for "Load unpacked" in Chromium; rebuilt so removed files do not linger.
+rm -rf "$APP_ROOT/browser-extension"
+cp -R "$ROOT/browser-extension" "$APP_ROOT/browser-extension"
+find "$APP_ROOT/browser-extension" -name '*.test.mjs' -delete
+# Firefox flavour: an unpacked folder for about:debugging and an .xpi for "Install Add-on From File".
+"$ROOT/scripts/build-firefox-extension.sh" "$ROOT/browser-extension" "$APP_ROOT/browser-extension-firefox" "$APP_ROOT/omatube-firefox.xpi"
+"$HOME/.local/bin/omatube" browser-setup >/dev/null || echo "Browser bridge was not installed; run: omatube browser-setup" >&2
 install -m 644 "$ROOT/systemd/omatube.service" "$UNIT_DIR/omatube.service"
 
 DEPENDENCY_DIGEST="$(sha256sum "$ROOT/requirements.lock" "$ROOT/package-lock.json" | sha256sum | cut -d' ' -f1)"

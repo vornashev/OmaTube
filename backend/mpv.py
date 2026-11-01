@@ -31,6 +31,7 @@ class MpvController:
         self.reader_task: asyncio.Task[None] | None = None
         self.event_task: asyncio.Task[None] | None = None
         self.event_queue: asyncio.Queue[dict[str, Any]] | None = None
+        self._command_names: dict[int, str] = {}
         self.pending: dict[
             int,
             tuple[asyncio.StreamReader, asyncio.Future[Any]],
@@ -174,6 +175,12 @@ class MpvController:
             "--osd-level=0",
             "--input-default-bindings=no",
             "--ytdl=no",
+            "--network-timeout=6",
+            "--cache=yes",
+            "--cache-secs=90",
+            "--demuxer-max-bytes=48MiB",
+            "--demuxer-readahead-secs=45",
+            "--stream-lavf-o=reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,reconnect_delay_max=4",
             "--audio-display=no",
             "--no-terminal",
             "--load-scripts=no",
@@ -283,7 +290,7 @@ class MpvController:
                     else:
                         future.set_exception(OmaTubeError(
                             "playback_error",
-                            f"mpv отклонил команду: {payload.get('error', 'unknown error')}",
+                            f"mpv отклонил команду {self._command_names.pop(request_id, '')}: {payload.get('error', 'unknown error')}",
                         ))
                 elif payload.get("event"):
                     if payload.get("event") == "client-message" and payload.get("args") == ["omatube-video-closed"]:
@@ -333,6 +340,7 @@ class MpvController:
         request_id = self.request_id
         future = asyncio.get_running_loop().create_future()
         self.pending[request_id] = (reader, future)
+        self._command_names[request_id] = str(command[0])
         payload = json.dumps(
             {"command": command, "request_id": request_id},
             separators=(",", ":"),
@@ -357,6 +365,7 @@ class MpvController:
                 "Не удалось отправить команду mpv",
             ) from exc
         finally:
+            self._command_names.pop(request_id, None)
             pending = self.pending.get(request_id)
             if pending and pending[1] is future:
                 self.pending.pop(request_id, None)
@@ -485,7 +494,13 @@ class MpvController:
                 if media.video.url != media.audio.url and not self.video_added:
                     await self._stream_options(media.video)
                     try:
-                        await self.command(["video-add", media.video.url, "select"])
+                        for attempt in range(3):
+                            try:
+                                await self.command(["video-add", media.video.url, "select"])
+                                break
+                            except OmaTubeError as error:
+                                if attempt == 2 or "отклонил" not in error.message: raise
+                                await asyncio.sleep(0.6)
                         self.video_added = True
                     finally:
                         await self._stream_options(media.audio)
@@ -519,6 +534,15 @@ class MpvController:
             "volume",
             max(0.0, min(100.0, value)),
         ])
+
+    async def set_speed(self, value: float) -> None:
+        await self.command(["set_property", "speed", max(0.25, min(3.0, value))])
+
+    async def set_audio_filters(self, normalize: bool, skip_silence: bool) -> None:
+        filters = []
+        if normalize: filters.append("loudnorm=I=-14:TP=-1.5:LRA=11")
+        if skip_silence: filters.append("silenceremove=stop_periods=-1:stop_duration=0.6:stop_threshold=-45dB")
+        await self.command(["set_property", "af", f"lavfi=[{','.join(filters)}]" if filters else ""])
 
     async def set_mute(self, value: bool) -> None:
         await self.command(["set_property", "mute", value])

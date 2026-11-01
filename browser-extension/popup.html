@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmaTube</title>
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { width: 340px; padding: 14px; display: grid; gap: 12px; }
+    header { display: flex; align-items: center; justify-content: space-between; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .actions .primary { grid-column: 1 / -1; }
+    .playing-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #settings { padding: 4px 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="icons/icon-48.png" alt=""><h1>OmaTube</h1></div>
+    <button id="settings" data-i18n="popupSettings"></button>
+  </header>
+  <section class="status" id="status">
+    <span class="dot"></span>
+    <div><div class="status-label"></div><div class="status-hint muted" hidden></div></div>
+  </section>
+  <section id="playing" hidden>
+    <h2 data-i18n="popupNowPlaying"></h2>
+    <div class="playing-title" id="playing-title"></div>
+    <div class="muted" id="playing-author"></div>
+  </section>
+  <section>
+    <div class="actions" id="actions">
+      <button class="primary" data-action="now" data-i18n="btnWatch"></button>
+      <button data-action="next" data-i18n="menuNext"></button>
+      <button data-action="end" data-i18n="menuEnd"></button>
+    </div>
+    <p class="muted" id="no-tab" data-i18n="popupNoTab" hidden></p>
+  </section>
+  <section class="note err" id="last-error" hidden>
+    <strong data-i18n="popupLastError"></strong>
+    <div id="last-error-text"></div>
+  </section>
+  <script src="lib/time.js"></script>
+  <script src="ui.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

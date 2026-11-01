@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from .errors import OmaTubeError
 
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
 PLAYLIST_ID = re.compile(r"^[A-Za-z0-9_-]{6,128}$")
+TIMESTAMP = re.compile(r"^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$")
+MAX_START = 24 * 3600
 ALLOWED_HOSTS = {
     "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"
 }
@@ -18,7 +21,17 @@ def canonical_video_url(video_id: str) -> str:
     return f"https://www.youtube.com/watch?{urlencode({'v': video_id})}"
 
 
-def normalize_youtube_url(raw: str) -> dict[str, str]:
+def parse_timestamp(raw: str | None) -> float | None:
+    """YouTube `t`/`start` values: `90`, `90s`, `1m30s`, `1h2m3s`."""
+    if not raw: return None
+    match = TIMESTAMP.fullmatch(raw.strip().lower())
+    if not match or not any(match.groups()): return None
+    hours, minutes, seconds = (int(value or 0) for value in match.groups())
+    total = hours * 3600 + minutes * 60 + seconds
+    return float(total) if 0 < total <= MAX_START else None
+
+
+def normalize_youtube_url(raw: str) -> dict[str, Any]:
     if not isinstance(raw, str) or not raw.strip():
         raise OmaTubeError("invalid_request", "Введите ссылку YouTube")
     try:
@@ -40,7 +53,10 @@ def normalize_youtube_url(raw: str) -> dict[str, str]:
     elif parsed.path == "/playlist":
         playlist_id = (query.get("list") or [None])[0]
     if video_id and VIDEO_ID.fullmatch(video_id):
-        return {"kind": "video", "videoId": video_id, "canonicalUrl": canonical_video_url(video_id)}
+        result: dict[str, Any] = {"kind": "video", "videoId": video_id, "canonicalUrl": canonical_video_url(video_id)}
+        start = parse_timestamp((query.get("t") or query.get("start") or [None])[0])
+        if start is not None: result["start"] = start
+        return result
     if playlist_id and PLAYLIST_ID.fullmatch(playlist_id):
         return {"kind": "playlist", "id": playlist_id,
                 "canonicalUrl": f"https://www.youtube.com/playlist?{urlencode({'list': playlist_id})}"}

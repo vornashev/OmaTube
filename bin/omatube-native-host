@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""Native messaging host (Chromium and Firefox families) for the "Watch in OmaTube" extension.
+
+The browser starts this process per message (stdin/stdout, 4-byte length prefix + JSON).
+Only `hello`, `transfer`, `queue`, `unqueue` and `queue_move` are accepted; they are translated into a fixed set of backend
+requests, so the extension cannot reach any other backend command.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import re
+import socket
+import struct
+import subprocess
+import sys
+import time
+from typing import Any, Callable
+
+MAX_MESSAGE = 64 * 1024
+MAX_RESPONSE = 8 * 1024 * 1024
+MAX_START = 24 * 3600
+VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{6,32}$")
+ACTIONS = {"now": ("play_url", "first"), "next": ("enqueue_url", "next"), "end": ("enqueue_url", "end")}
+BACKEND_START_TIMEOUT = 6.0
+
+Backend = Callable[[dict[str, Any], bool], dict[str, Any]]
+
+
+class HostError(Exception):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message); self.code = code; self.message = message
+
+
+def data_dir() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "omatube"
+
+
+def host_version() -> str:
+    try: return (data_dir() / ".installed-version").read_text(encoding="utf-8").strip()
+    except OSError: return ""
+
+
+def socket_path() -> Path:
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    return Path(runtime) / "omatube" / "backend.sock"
+
+
+def read_message(stream) -> dict[str, Any] | None:
+    header = stream.read(4)
+    if not header: return None
+    if len(header) != 4: raise HostError("invalid_request", "Обрезанное сообщение")
+    (length,) = struct.unpack("<I", header)
+    if length > MAX_MESSAGE: raise HostError("invalid_request", "Сообщение слишком большое")
+    body = stream.read(length)
+    if len(body) != length: raise HostError("invalid_request", "Обрезанное сообщение")
+    try: value = json.loads(body)
+    except json.JSONDecodeError as exc: raise HostError("invalid_request", "Некорректный JSON") from exc
+    if not isinstance(value, dict): raise HostError("invalid_request", "Сообщение должно быть объектом")
+    return value
+
+
+def write_message(stream, value: dict[str, Any]) -> None:
+    body = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+    stream.write(struct.pack("<I", len(body)) + body); stream.flush()
+
+
+def socket_request(request: dict[str, Any], path: Path | None = None, timeout: float = 10) -> dict[str, Any]:
+    payload = (json.dumps(request, ensure_ascii=False, separators=(",", ":")) + "\n").encode()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout); client.connect(str(path or socket_path())); client.sendall(payload)
+        chunks = bytearray()
+        while not chunks.endswith(b"\n"):
+            chunk = client.recv(65536)
+            if not chunk: break
+            chunks.extend(chunk)
+            if len(chunks) > MAX_RESPONSE: raise OSError("response too large")
+    return json.loads(chunks)
+
+
+def backend_request(request: dict[str, Any], start_service: bool = True) -> dict[str, Any]:
+    """Send a request, starting the systemd user service once if the socket is missing."""
+    try: return socket_request(request)
+    except (FileNotFoundError, ConnectionRefusedError):
+        if not start_service: raise HostError("backend_down", "Сервис OmaTube не запущен")
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HostError("backend_down", f"Сервис OmaTube недоступен: {exc}") from exc
+    try:
+        subprocess.run(["systemctl", "--user", "start", "omatube.service"], timeout=BACKEND_START_TIMEOUT,
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    except (OSError, subprocess.TimeoutExpired): pass
+    deadline = time.monotonic() + BACKEND_START_TIMEOUT
+    while time.monotonic() < deadline:
+        try: return socket_request(request)
+        except (FileNotFoundError, ConnectionRefusedError): time.sleep(0.2)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HostError("backend_down", f"Сервис OmaTube недоступен: {exc}") from exc
+    raise HostError("backend_down", "Сервис OmaTube не запустился")
+
+
+def unwrap(response: dict[str, Any]) -> Any:
+    if response.get("ok"): return response.get("result")
+    error = response.get("error") if isinstance(response.get("error"), dict) else {}
+    raise HostError(str(error.get("code") or "provider_error"), str(error.get("message") or "Ошибка OmaTube"))
+
+
+def clock(seconds: float) -> str:
+    total = int(seconds); hours, rest = divmod(total, 3600); minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def text(value: Any, limit: int) -> str | None:
+    return value.strip()[:limit] if isinstance(value, str) and value.strip() else None
+
+
+def build_transfer(message: dict[str, Any]) -> dict[str, Any]:
+    video_id = message.get("videoId")
+    if not isinstance(video_id, str) or not VIDEO_ID.fullmatch(video_id):
+        raise HostError("invalid_request", "Некорректный идентификатор видео")
+    action = message.get("action", "now")
+    if action not in ACTIONS: raise HostError("invalid_request", "Неизвестное действие")
+    command, placement = ACTIONS[action]
+    request: dict[str, Any] = {"command": command, "url": f"https://www.youtube.com/watch?v={video_id}", "origin": "browser"}
+    if placement: request["placement"] = placement
+    start = message.get("start")
+    if start is not None and not message.get("live"):
+        if isinstance(start, bool) or not isinstance(start, (int, float)) or not 0 <= start <= MAX_START:
+            raise HostError("invalid_request", "Некорректная позиция")
+        request["start"] = float(int(start))
+    media = {key: value for key, value in (("title", text(message.get("title"), 300)), ("author", text(message.get("author"), 200)),
+                                            ("authorId", text(message.get("channelId"), 64))) if value}
+    duration = message.get("duration")
+    if not isinstance(duration, bool) and isinstance(duration, (int, float)) and duration > 0: media["duration"] = float(duration)
+    if media: request["media"] = media
+    return request
+
+
+# Browser executable name → (id, display name); ids match KNOWN_BROWSERS in bin/omatube.
+BROWSER_EXECUTABLES = {
+    "chromium": ("chromium", "Chromium"), "chromium-browser": ("chromium", "Chromium"),
+    "brave": ("brave", "Brave"), "vivaldi-bin": ("vivaldi", "Vivaldi"), "msedge": ("microsoft-edge", "Microsoft Edge"),
+    "opera": ("opera", "Opera"), "thorium": ("thorium", "Thorium"), "helium": ("helium", "Helium"),
+    "yandex_browser": ("yandex-browser", "Yandex Browser"),
+    "firefox": ("firefox", "Firefox"), "firefox-bin": ("firefox", "Firefox"), "zen": ("zen", "Zen"), "zen-bin": ("zen", "Zen"),
+    "librewolf": ("librewolf", "LibreWolf"), "librewolf-bin": ("librewolf", "LibreWolf"), "floorp": ("floorp", "Floorp"),
+    "waterfox": ("waterfox", "Waterfox"), "waterfox-bin": ("waterfox", "Waterfox"),
+}
+# Google Chrome channels all ship a binary called "chrome"; the install dir tells them apart.
+CHROME_DIRS = {"chrome": ("google-chrome", "Google Chrome"), "chrome-beta": ("google-chrome-beta", "Chrome Beta"),
+               "chrome-unstable": ("google-chrome-unstable", "Chrome Dev")}
+SHELLS = {"sh", "bash", "dash", "zsh", "env"}
+
+
+def parent_pid(pid: int) -> int | None:
+    try: stat = Path(f"/proc/{pid}/stat").read_text()
+    except OSError: return None
+    # The command name in field 2 may contain spaces or parentheses; fields after the last ")" are fixed.
+    fields = stat[stat.rindex(")") + 2:].split()
+    return int(fields[1]) if len(fields) > 1 else None
+
+
+def identify_browser(pid: int | None = None) -> tuple[str, str] | None:
+    """Which browser started this host, from the executable of the nearest non-shell ancestor."""
+    pid = os.getppid() if pid is None else pid
+    for _ in range(4):
+        if not pid or pid <= 1: return None
+        try: executable = Path(os.readlink(f"/proc/{pid}/exe").removesuffix(" (deleted)"))
+        except OSError: return None
+        name = executable.name
+        if name in SHELLS: pid = parent_pid(pid); continue
+        if name == "chrome": return CHROME_DIRS.get(executable.parent.name, ("google-chrome", "Google Chrome"))
+        if name in BROWSER_EXECUTABLES: return BROWSER_EXECUTABLES[name]
+        return (name, name)
+    return None
+
+
+def record_link(message: dict[str, Any], transferred: bool, browser: tuple[str, str] | None = None) -> None:
+    path = data_dir() / "browser-link.json"
+    try: state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError): state = {}
+    if not isinstance(state, dict): state = {}
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    version = text(message.get("extensionVersion"), 32)
+    if version: state["extensionVersion"] = version
+    label = text(message.get("browser"), 64)
+    if browser or label: state["browser"] = browser[1] if browser else label
+    state["lastSeen"] = now
+    if transferred: state["lastTransfer"] = now
+    if browser:
+        rows = state.get("browsers") if isinstance(state.get("browsers"), dict) else {}
+        row = rows.get(browser[0]) if isinstance(rows.get(browser[0]), dict) else {}
+        row.update(name=browser[1], lastSeen=now)
+        if version: row["extensionVersion"] = version
+        if transferred: row["lastTransfer"] = now
+        rows[browser[0]] = row; state["browsers"] = rows
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.chmod(0o600); temporary.replace(path)
+    except OSError: pass
+
+
+NOTIFY_TEXT = {
+    "en": {"video": "YouTube video", "play_url": "Resuming", "enqueue_url": "Queued"},
+    "ru": {"video": "Видео с YouTube", "play_url": "Продолжаю", "enqueue_url": "В очереди"},
+}
+
+
+def resolve_language(preference: Any) -> str:
+    """The language preference, or the first supported language of the environment (English by default)."""
+    if preference in NOTIFY_TEXT: return preference
+    for name in ("LC_ALL", "LC_MESSAGES", "LANGUAGE", "LANG"):
+        for part in str(os.environ.get(name) or "").split(":"):
+            code = part.replace("-", "_").split(".")[0].split("@")[0].split("_")[0].lower()
+            if code in NOTIFY_TEXT: return code
+    return "en"
+
+
+def notify(title: str, body: str) -> None:
+    try:
+        subprocess.Popen(["notify-send", "-a", "OmaTube", "-i", "multimedia-video-player", title, body],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError: pass
+
+
+def queue_state(details: dict[str, Any]) -> dict[str, Any]:
+    """Queue as {videoId: {position, eta}}: 0 is the playing entry, 1 the next one.
+
+    `eta` is seconds until the entry starts, omitted once a duration in between is unknown.
+    """
+    rows = [row for row in details.get("queue") or [] if isinstance(row, dict) and isinstance(row.get("media"), dict)]
+    current = details.get("current") if isinstance(details.get("current"), dict) else {}
+    index = next((i for i, row in enumerate(rows) if row.get("entryId") == current.get("entryId")), -1)
+    number = lambda value: float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0 else None
+    duration = number(details.get("duration"))
+    eta = max(0.0, duration - (number(details.get("position")) or 0.0)) if duration else None
+    videos: dict[str, dict[str, Any]] = {}
+    for i in range(max(index, 0), len(rows)):
+        media = rows[i]["media"]; video_id = media.get("videoId")
+        position = i - index
+        if isinstance(video_id, str) and video_id not in videos:
+            videos[video_id] = {"position": position}
+            if eta is not None and position > 0: videos[video_id]["eta"] = int(eta)
+        if position > 0:
+            length = number(media.get("duration"))
+            eta = eta + length if eta is not None and length else None
+    total = len(rows) - index - 1
+    if details.get("lane") != "main":
+        # Saved for later while a playlist plays: My queue comes after what Now playing has left.
+        for row in details.get("mainQueue") or []:
+            media = row.get("media") if isinstance(row, dict) else None
+            video_id = media.get("videoId") if isinstance(media, dict) else None
+            total += 1
+            if isinstance(video_id, str) and video_id not in videos: videos[video_id] = {"position": total}
+    return {"videos": videos, "total": total}
+
+
+def handle(message: dict[str, Any], backend: Backend = backend_request, browser: tuple[str, str] | None = None) -> dict[str, Any]:
+    kind = message.get("type")
+    if kind == "hello":
+        result: dict[str, Any] = {"hostVersion": host_version(), "backend": "down", "accept": None, "current": None,
+                                  "browserId": browser[0] if browser else None, "browserName": browser[1] if browser else None}
+        try: status = unwrap(backend({"command": "status"}, False))
+        except HostError: record_link(message, False, browser); return result
+        current = status.get("current") if isinstance(status.get("current"), dict) else None
+        media = current.get("media") if current and isinstance(current.get("media"), dict) else {}
+        result.update(backend="up", accept=bool(status.get("preferences", {}).get("browserAccept", True)), state=status.get("state"),
+                      current={"title": media.get("title"), "author": media.get("author")} if media else None)
+        record_link(message, False, browser)
+        return result
+    if kind == "transfer":
+        request = build_transfer(message)
+        status = unwrap(backend({"command": "status"}, True))
+        unwrap(backend(request, False))
+        record_link(message, True, browser)
+        if status.get("preferences", {}).get("browserNotify", True):
+            words = NOTIFY_TEXT[resolve_language(status.get("preferences", {}).get("language"))]
+            title = request.get("media", {}).get("title") or words["video"]
+            verb = words[request["command"]]
+            suffix = f" · {clock(request['start'])}" if request.get("start") else ""
+            notify("OmaTube", f"{verb}: {title}{suffix}")
+        return {"transferred": True, "command": request["command"], "start": request.get("start", 0)}
+    if kind == "queue":
+        # Never starts the service: marking thumbnails must not wake OmaTube up.
+        try: return queue_state(unwrap(backend({"command": "details"}, False)))
+        except HostError: return {"videos": {}, "total": 0}
+    if kind in {"unqueue", "queue_move"}:
+        video_id = message.get("videoId")
+        if not isinstance(video_id, str) or not VIDEO_ID.fullmatch(video_id):
+            raise HostError("invalid_request", "Некорректный идентификатор видео")
+        placement = message.get("placement")
+        if kind == "queue_move" and placement not in {"next", "end"}: raise HostError("invalid_request", "Неизвестное место в очереди")
+        details = unwrap(backend({"command": "details"}, False))
+        current_id = (details.get("current") or {}).get("entryId")
+        entry = None
+        for lane_rows in (details.get("queue"), details.get("mainQueue")):
+            rows = [row for row in lane_rows or [] if isinstance(row, dict) and isinstance(row.get("media"), dict)]
+            entry = next((row for row in rows if row["media"].get("videoId") == video_id and row.get("entryId") != current_id), None)
+            if entry: break
+        if not entry: raise HostError("not_found", "Видео нет в очереди")
+        if kind == "unqueue":
+            unwrap(backend({"command": "queue_remove", "entryId": entry["entryId"]}, False))
+            return {"removed": True}
+        others = [row for row in rows if row is not entry]
+        index = next((i for i, row in enumerate(others) if row.get("entryId") == current_id), -1)
+        before = others[index + 1]["entryId"] if placement == "next" and index + 1 < len(others) else None
+        unwrap(backend({"command": "queue_move", "entryId": entry["entryId"], "beforeEntryId": before}, False))
+        return {"moved": True}
+    raise HostError("invalid_request", "Неизвестный тип сообщения")
+
+
+def main() -> int:
+    stdin, stdout = sys.stdin.buffer, sys.stdout.buffer
+    try:
+        message = read_message(stdin)
+        if message is None: return 0
+        response = {"ok": True, "result": handle(message, browser=identify_browser())}
+    except HostError as error:
+        response = {"ok": False, "error": {"code": error.code, "message": error.message}}
+    except Exception:
+        response = {"ok": False, "error": {"code": "provider_error", "message": "Внутренняя ошибка связки с браузером"}}
+    write_message(stdout, response)
+    return 0
+
+
+if __name__ == "__main__": raise SystemExit(main())

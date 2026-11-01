@@ -31,6 +31,17 @@ class StorageTests(unittest.TestCase):
     def tearDown(self):
         self.storage.close(); self.temp.cleanup()
 
+    def test_playlist_membership_and_remove_video_renumbers(self):
+        playlist = self.storage.create_playlist("List")["id"]
+        self.storage.add_playlist_item(playlist, MEDIA)
+        self.storage.add_playlist_item(playlist, SECOND_MEDIA)
+        self.storage.add_playlist_item(playlist, MEDIA)
+        self.assertEqual(self.storage.playlist_membership(MEDIA["videoId"]), [playlist])
+        self.assertEqual(self.storage.remove_playlist_video(playlist, MEDIA["videoId"]), 2)
+        self.assertEqual(self.storage.playlist_membership(MEDIA["videoId"]), [])
+        items = self.storage.open_playlist(playlist)["items"]
+        self.assertEqual([row["media"]["videoId"] for row in items], [SECOND_MEDIA["videoId"]])
+
     def test_duplicate_occurrences_have_distinct_identity_and_order(self):
         playlist = self.storage.create_playlist("Тест")
         first = self.storage.add_playlist_item(playlist["id"], MEDIA)
@@ -47,6 +58,16 @@ class StorageTests(unittest.TestCase):
         self.storage.delete_playlist(playlist["id"])
         self.assertEqual(self.storage.collection("saved")["items"][0]["videoId"], MEDIA["videoId"])
         self.assertEqual(self.storage.collection("history")["items"][0]["videoId"], MEDIA["videoId"])
+
+    def test_playlist_resume_is_returned_with_playlist_and_dropped_on_delete(self):
+        playlist = self.storage.create_playlist("Тест")
+        self.storage.add_playlist_item(playlist["id"], MEDIA)
+        self.assertIsNone(self.storage.open_playlist(playlist["id"])["resume"])
+        self.storage.save_playlist_resume(playlist["id"], 11, MEDIA["videoId"], 72.5)
+        resume = self.storage.open_playlist(playlist["id"])["resume"]
+        self.assertEqual((resume["index"], resume["videoId"], resume["position"]), (11, MEDIA["videoId"], 72.5))
+        self.storage.delete_playlist(playlist["id"])
+        self.assertIsNone(self.storage.playlist_resume(playlist["id"]))
 
     def test_invalid_final_copy_rolls_back_user_playlist(self):
         self.storage.stage_copy_page("operation", [MEDIA, MEDIA], 0)

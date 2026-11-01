@@ -76,6 +76,22 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         second.set_result(ResolvedMedia(ResolvedStream("https://stream.invalid/new", {}), 60, True)); await asyncio.sleep(0.01)
         self.assertEqual(self.mpv.loaded[0][0], "https://stream.invalid/new")
 
+    async def test_replace_starts_from_requested_position(self):
+        await self.player.replace(media("AAAAAA1"), 125.0); await asyncio.sleep(0)
+        self.assertEqual(self.player.position, 125.0)
+        self.resolver.futures["AAAAAA1"].set_result(ResolvedMedia(ResolvedStream("https://stream.invalid/a", {}), 600, True)); await asyncio.sleep(0.01)
+        self.assertEqual(self.mpv.loaded[-1], ("https://stream.invalid/a", 125.0))
+
+    async def test_enqueued_start_applies_once(self):
+        await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)
+        entry = self.player.enqueue(media("BBBBBB2"), "next", 42.0)
+        self.assertEqual(entry["startAt"], 42.0)
+        await self.player.play_entry(entry["entryId"]); await asyncio.sleep(0)
+        self.assertEqual(self.player.position, 42.0)
+        self.assertNotIn("startAt", self.player.current)
+        await self.player.play_entry(entry["entryId"]); await asyncio.sleep(0)
+        self.assertEqual(self.player.position, 0)
+
     async def test_restore_is_paused_without_resolving(self):
         entry = {"entryId": "entry-1", "media": media("AAAAAA1")}
         self.storage.save_player_state({"queue": [entry], "currentEntryId": "entry-1", "position": 12, "volume": 42, "muted": False, "shuffle": False, "repeat": "off", "videoMode": "floating"})
@@ -344,6 +360,171 @@ class PlayerTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OmaTubeError) as caught:
             await self.player.replace_many([])
         self.assertEqual(caught.exception.code, "not_found")
+
+
+class QueueContextTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp = PlayerTests.asyncSetUp
+    asyncTearDown = PlayerTests.asyncTearDown
+
+    async def test_context_reports_position_in_source_list_and_survives_restore(self):
+        context = {"kind": "playlist", "id": "pl-1", "name": "Divinity OST", "offset": 2, "total": 40}
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2")], 0, context); await asyncio.sleep(0)
+        self.assertEqual(self.player.status()["context"]["index"], 3)
+        await self.player.play_entry(self.player.queue[1]["entryId"]); await asyncio.sleep(0)
+        self.assertEqual(self.player.status()["context"]["index"], 4)
+        restored = Player(self.storage, self.resolver, self.mpv, lambda: None)
+        self.assertEqual(restored.status()["context"]["id"], "pl-1")
+        await self.player.replace(media("CCCCCC3")); await asyncio.sleep(0)
+        self.assertIsNone(self.player.status()["context"])
+
+    async def test_enqueue_reports_position_after_current(self):
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2")]); await asyncio.sleep(0)
+        self.assertEqual(self.player.enqueue(media("CCCCCC3"), "end", lane="source")["position"], 2)
+        self.assertEqual(self.player.enqueue(media("DDDDDD4"), "next")["position"], 1)
+        self.assertNotIn("position", self.player.queue[-1])
+
+    async def test_play_first_heads_my_queue_and_keeps_the_interrupted_video_next(self):
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2")]); await asyncio.sleep(0)
+        self.player.enqueue(media("CCCCCC3"), "end")
+        await self.player.play_first(media("DDDDDD4"), 30.0); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "main")
+        self.assertEqual([row["media"]["videoId"] for row in self.player.queue], ["DDDDDD4", "CCCCCC3"])
+        self.assertEqual(self.player.current["media"]["videoId"], "DDDDDD4")
+        self.assertEqual(self.player.position, 30.0)
+        await self.player.play_first(media("EEEEEE5")); await asyncio.sleep(0)
+        self.assertEqual([row["media"]["videoId"] for row in self.player.queue], ["EEEEEE5", "DDDDDD4", "CCCCCC3"])
+        # Already waiting in My queue: moved to the head, not duplicated.
+        await self.player.play_first(media("CCCCCC3")); await asyncio.sleep(0)
+        self.assertEqual([row["media"]["videoId"] for row in self.player.queue], ["CCCCCC3", "EEEEEE5", "DDDDDD4"])
+        self.assertEqual(self.player.enqueue(media("FFFFFF6"), "next")["position"], 1)
+        self.assertEqual(self.player.queue[1]["media"]["videoId"], "FFFFFF6")
+
+    async def test_play_next_into_an_idle_queue_goes_first(self):
+        self.player.lane = "main"
+        self.player.enqueue(media("AAAAAA1"), "end")
+        self.player.enqueue(media("BBBBBB2"), "next")
+        self.assertEqual([row["media"]["videoId"] for row in self.player.queue], ["BBBBBB2", "AAAAAA1"])
+
+    async def test_restore_puts_removed_entries_back_in_place(self):
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2"), media("CCCCCC3"), media("DDDDDD4")])
+        await asyncio.sleep(0)
+        rows = [dict(row) for row in self.player.queue]
+        await self.player.remove(rows[1]["entryId"]); await self.player.remove(rows[2]["entryId"])
+        # Bottom-up: C goes back before D, then B before the restored C.
+        self.player.restore([{"entry": rows[2], "beforeEntryId": rows[3]["entryId"]},
+                             {"entry": rows[1], "beforeEntryId": rows[2]["entryId"]}])
+        self.assertEqual([row["entryId"] for row in self.player.queue], [row["entryId"] for row in rows])
+        self.player.restore([{"entry": rows[1], "beforeEntryId": None}])
+        self.assertEqual(len(self.player.queue), 4)
+        with self.assertRaises(OmaTubeError):
+            self.player.restore([{"entry": {"entryId": "x", "media": {}}}])
+
+    async def test_cancel_load_keeps_entry_and_play_retries(self):
+        await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)
+        await self.player.cancel_load(); await asyncio.sleep(0)
+        self.assertEqual(self.player.state, "paused")
+        self.assertEqual(self.player.current["media"]["videoId"], "AAAAAA1")
+        self.resolver.futures.clear()
+        await self.player.play(); await asyncio.sleep(0)
+        self.assertEqual(self.player.state, "loading")
+        self.assertIn("AAAAAA1", self.resolver.futures)
+
+    async def test_upcoming_skip_segment_can_be_kept_once(self):
+        self.player.sponsor_actions = {"sponsor": "skip"}
+        self.player.segments = [{"id": "seg", "start": 100.0, "end": 130.0, "category": "sponsor"}]
+        self.player.state = "playing"; self.player.position = 98.0
+        self.assertEqual(self.player.sponsor_status()["upcoming"]["id"], "seg")
+        self.player.sponsor_keep("seg")
+        self.assertIsNone(self.player.sponsor_status()["upcoming"])
+        self.player.position = 110.0; self.player.can_seek = True
+        await self.player._check_segments(110.0)
+        self.assertNotIn("seg", self.player.sponsor_done)
+
+
+class LaneTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp = PlayerTests.asyncSetUp
+    asyncTearDown = PlayerTests.asyncTearDown
+
+    async def resolve(self, video_id, duration=600):
+        self.resolver.futures[video_id].set_result(ResolvedMedia(ResolvedStream(f"https://stream.invalid/{video_id}", {}), duration, True))
+        await asyncio.sleep(0.01)
+
+    def ids(self, lane):
+        return [row["media"]["videoId"] for row in self.player.lanes[lane]["queue"]]
+
+    async def test_play_fills_now_playing_and_keeps_my_queue(self):
+        saved = self.player.enqueue(media("QQQQQQ1"), "end")
+        self.assertEqual(saved["lane"], "main")
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2")]); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "source")
+        self.assertEqual(self.ids("main"), ["QQQQQQ1"])
+        self.player.enqueue(media("CCCCCC3"), "next")
+        self.assertEqual(self.ids("source"), ["AAAAAA1", "CCCCCC3", "BBBBBB2"])
+        self.assertEqual(self.player.status()["lanes"]["main"]["count"], 1)
+
+    async def test_switch_to_my_queue_resumes_saved_position(self):
+        self.player.enqueue(media("QQQQQQ1"), "end")
+        self.storage.save_progress("QQQQQQ1", 760.0, 1445.0)
+        await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)
+        await self.player.switch_lane("main"); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "main")
+        await self.resolve("QQQQQQ1", 1445)
+        self.assertEqual(self.mpv.loaded[-1], ("https://stream.invalid/QQQQQQ1", 760.0))
+        await self.player.switch_lane("source", play=False)
+        self.assertEqual((self.player.lane, self.player.state), ("source", "paused"))
+        self.assertEqual(self.player.current["media"]["videoId"], "AAAAAA1")
+
+    async def test_finished_item_leaves_my_queue_and_can_be_undone(self):
+        for video_id in ("QQQQQQ1", "QQQQQQ2"): self.player.enqueue(media(video_id), "end")
+        await self.player.switch_lane("main"); await asyncio.sleep(0)
+        await self.resolve("QQQQQQ1")
+        await self.player.handle_mpv_event({"event": "end-file", "reason": "eof"}); await asyncio.sleep(0)
+        self.assertEqual(self.ids("main"), ["QQQQQQ2"])
+        notice = self.player.status()["notice"]
+        self.assertEqual((notice["kind"], notice["title"]), ("finished", "QQQQQQ1"))
+        self.assertEqual(self.player.current["media"]["videoId"], "QQQQQQ2")
+        self.player.restore(notice["entries"], "main")
+        self.assertEqual(self.ids("main"), ["QQQQQQ1", "QQQQQQ2"])
+
+    async def test_skipping_unfinished_item_keeps_it_in_my_queue(self):
+        for video_id in ("QQQQQQ1", "QQQQQQ2"): self.player.enqueue(media(video_id), "end")
+        await self.player.switch_lane("main"); await asyncio.sleep(0)
+        await self.resolve("QQQQQQ1")
+        self.player.position = 120.0
+        await self.player.next(); await asyncio.sleep(0)
+        self.assertEqual(self.ids("main"), ["QQQQQQ1", "QQQQQQ2"])
+        self.player.position = 590.0; self.player.duration = 600.0
+        await self.player.next(); await asyncio.sleep(0)
+        self.assertEqual(self.ids("main"), ["QQQQQQ1"])
+
+    async def test_end_of_playlist_continues_with_my_queue(self):
+        self.player.enqueue(media("QQQQQQ1"), "end")
+        await self.player.replace_many([media("AAAAAA1")], 0, {"kind": "playlist", "id": "pl", "name": "Mix"}); await asyncio.sleep(0)
+        await self.resolve("AAAAAA1")
+        await self.player.handle_mpv_event({"event": "end-file", "reason": "eof"}); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "main")
+        self.assertEqual(self.player.status()["notice"]["reason"], "sourceEnded")
+        self.assertEqual(self.player.lanes["source"]["currentEntryId"], self.player.lanes["source"]["queue"][0]["entryId"])
+
+    async def test_remove_by_entry_id_finds_the_inactive_lane(self):
+        saved = self.player.enqueue(media("QQQQQQ1"), "end")
+        await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)
+        await self.player.remove(saved["entryId"])
+        self.assertEqual(self.ids("main"), [])
+        self.assertEqual(self.ids("source"), ["AAAAAA1"])
+
+    async def test_lanes_survive_restart_and_old_snapshots_migrate(self):
+        self.player.enqueue(media("QQQQQQ1"), "end")
+        await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)
+        restored = Player(self.storage, self.resolver, self.mpv, lambda: None)
+        self.assertEqual(restored.lane, "source")
+        self.assertEqual([row["media"]["videoId"] for row in restored.lanes["main"]["queue"]], ["QQQQQQ1"])
+        entry = {"entryId": "entry-1", "media": media("BBBBBB2")}
+        self.storage.save_player_state({"queue": [entry], "currentEntryId": "entry-1", "position": 12})
+        self.assertEqual(Player(self.storage, self.resolver, self.mpv, lambda: None).lane, "main")
+        self.storage.save_player_state({"queue": [entry], "currentEntryId": "entry-1", "context": {"kind": "playlist", "id": "pl"}})
+        legacy = Player(self.storage, self.resolver, self.mpv, lambda: None)
+        self.assertEqual((legacy.lane, legacy.current_id), ("source", "entry-1"))
 
 
 if __name__ == "__main__": unittest.main()

@@ -1,7 +1,9 @@
 import QtQuick
 import QtQuick.Controls
+import Quickshell
 import qs.Commons
 import qs.Ui
+import "i18n.js" as L
 
 Item {
   id: root
@@ -11,6 +13,7 @@ Item {
   property string fontFamily: Style.font.family
   signal playlistPickerRequested(var media)
   signal collectionRequested()
+  signal pageRequested(int page)
 
   property string source: "youtube"
   property string filter: "all"
@@ -20,6 +23,9 @@ Item {
   property var copyEntity: null
   property var entityContext: null
   property bool returnToCollection: false
+  property var entityStack: []
+  property string restoreTab: ""
+  property int returnPage: -1
   property string searchOperationId: ""
   property string suggestionOperationId: ""
   property string entityOperationId: ""
@@ -46,12 +52,18 @@ Item {
   property bool suggestionsSuppressed: false
 
   readonly property color dim: Qt.darker(foreground, 1.5)
+  readonly property color lineColor: Qt.rgba(foreground.r, foreground.g, foreground.b, .1)
+  readonly property bool isChannel: showEntity && Boolean(entityView.entity) && entityView.entity.kind === "channel"
+  readonly property bool wideLayout: width >= Style.space(560)
+  readonly property bool gridMode: wideLayout && String(((logic && logic.stateData.preferences) || ({})).searchView || "grid") !== "list"
+  readonly property int gridColumns: Math.max(2, Math.floor(width / Style.space(230)))
+  readonly property real cardWidth: Math.floor((resultsViewport.width - (results.contentHeight > results.height ? Style.space(8) : 0)) / gridColumns)
   readonly property var filters: source === "youtube"
-    ? [{ value: "all", label: "ВСЕ" }, { value: "video", label: "ВИДЕО" },
-       { value: "playlist", label: "СПИСКИ" }, { value: "channel", label: "КАНАЛЫ" }]
-    : [{ value: "all", label: "ВСЕ" }, { value: "song", label: "ТРЕКИ" },
-       { value: "video", label: "ВИДЕО" }, { value: "playlist", label: "СПИСКИ" },
-       { value: "artist", label: "АРТИСТЫ" }]
+    ? [{ value: "all", label: L.tr("ВСЕ") }, { value: "video", label: L.tr("ВИДЕО") },
+       { value: "playlist", label: L.tr("ПЛЕЙЛИСТЫ") }, { value: "channel", label: L.tr("КАНАЛЫ") }]
+    : [{ value: "all", label: L.tr("ВСЕ") }, { value: "song", label: L.tr("ТРЕКИ") },
+       { value: "video", label: L.tr("ВИДЕО") }, { value: "playlist", label: L.tr("ПЛЕЙЛИСТЫ") },
+       { value: "artist", label: L.tr("АРТИСТЫ") }]
   readonly property var searchOperation: logic ? logic.operation(searchOperationId) : null
   readonly property var suggestionOperation: logic ? logic.operation(suggestionOperationId) : null
   readonly property var entityOperation: logic ? logic.operation(entityOperationId) : null
@@ -97,6 +109,20 @@ Item {
     if (selectedSuggestionIndex >= visibleSuggestions.length)
       selectedSuggestionIndex = -1
   }
+
+  function swapLayout(text) {
+    var en = "qwertyuiop[]asdfghjkl;'zxcvbnm,./`QWERTYUIOP{}ASDFGHJKL:\"ZXCVBNM<>?~"
+    var ru = "йцукенгшщзхъфывапролджэячсмитьбю.ёЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ,Ё"
+    var toRu = /[a-z]/i.test(text) && !/[а-яё]/i.test(text)
+    var out = ""
+    for (var i = 0; i < text.length; ++i) {
+      var ch = text.charAt(i)
+      var index = toRu ? en.indexOf(ch) : ru.indexOf(ch)
+      out += index >= 0 ? (toRu ? ru : en).charAt(index) : ch
+    }
+    return out
+  }
+  readonly property string layoutFix: query !== "" ? swapLayout(query) : ""
 
   function operationRunning(operation) { return operation && operation.state === "running" }
   function operationFailed(operation) { return operation && operation.state === "failed" }
@@ -166,6 +192,7 @@ Item {
     if (!nextQuery || !logic) return
     dismissSuggestions()
     query = nextQuery
+    entityStack = []
     returnToCollection = false
     showEntity = false
     latestEntityRequestId = 0
@@ -183,6 +210,7 @@ Item {
     searchRequestFilter = filter
     searchRequestQuery = query
     results.contentY = 0
+    grid.contentY = 0
     latestSearchRequestId = logic.request("search", {
       source: searchRequestSource,
       kind: searchRequestFilter,
@@ -204,9 +232,43 @@ Item {
     })
   }
 
-  function openEntity(entity) {
+  readonly property string baseLabel: returnToCollection ? L.tr("МЕДИАТЕКА") : (returnPage === 4 ? L.tr("ПОДПИСКИ") : (returnPage === 0 ? L.tr("СЕЙЧАС") : L.tr("ПОИСК")))
+  readonly property var crumbs: {
+    var rows = [{ label: baseLabel, depth: -1 }]
+    for (var i = 0; i < entityStack.length; ++i)
+      rows.push({ label: String(entityStack[i].entity.title || L.tr("Страница каталога")), depth: i })
+    return rows
+  }
+
+  // Opens an entity from inside another entity page and remembers where we came from.
+  function pushEntity(entity) {
+    returnToCollection = returnToCollection && showEntity
+    if (showEntity && entityContext) {
+      var next = entityStack.slice()
+      next.push({ entity: entityContext, tab: isChannel ? channelPage.activeTab : "" })
+      entityStack = next
+      openEntity(entity, true, "")
+    } else {
+      openEntity(entity)
+    }
+  }
+
+  function popTo(depth) {
+    if (depth < 0) {
+      entityStack = []
+      closeEntity()
+      return
+    }
+    var target = entityStack[depth]
+    entityStack = entityStack.slice(0, depth)
+    openEntity(target.entity, true, target.tab)
+  }
+
+  function openEntity(entity, keepStack, tab) {
     if (!logic) return
-    savedContentY = results.contentY
+    if (keepStack !== true) entityStack = []
+    restoreTab = tab || ""
+    if (!showEntity) savedContentY = results.contentY
     entityContext = entity
     showEntity = true
     latestSearchRequestId = 0
@@ -234,19 +296,28 @@ Item {
     )
   }
 
+  function requestSection(tab, sort) {
+    if (!logic || !view.viewId || morePending || loadingMore) return
+    moreOperationId = ""
+    moreAcknowledgementError = ""
+    morePending = true
+    moreRequestViewId = String(view.viewId)
+    latestMoreRequestId = logic.request("entity_section", { viewId: moreRequestViewId, tab: tab, sort: sort })
+  }
+
   function retryFailure() {
     if (!failure || !logic) return
     var kind = String(failure.kind || "")
     if (kind === "search") search()
     else if (kind === "open_entity")
-      openEntity(failure.request ? failure.request.entity : entityContext)
+      openEntity(failure.request ? failure.request.entity : entityContext, true, restoreTab)
   }
 
   function retryMore() {
     var code = moreFailure && moreFailure.error
       ? String(moreFailure.error.code || "") : ""
     if (code === "cursor_expired") {
-      if (showEntity) openEntity(entityContext)
+      if (showEntity) openEntity(entityContext, true, restoreTab)
       else search()
     } else {
       requestMore()
@@ -254,6 +325,7 @@ Item {
   }
 
   function closeEntity() {
+    if (entityStack.length > 0) { popTo(entityStack.length - 1); return }
     latestEntityRequestId = 0
     latestMoreRequestId = 0
     entityPending = false
@@ -265,8 +337,12 @@ Item {
     if (returnToCollection) {
       returnToCollection = false
       collectionRequested()
+    } else if (returnPage >= 0) {
+      var target = returnPage
+      returnPage = -1
+      pageRequested(target)
     } else {
-      Qt.callLater(function() { results.contentY = savedContentY })
+      Qt.callLater(function() { results.contentY = savedContentY; grid.contentY = savedContentY })
     }
   }
   function chooseSuggestion(value) {
@@ -277,7 +353,7 @@ Item {
 
   function beginCopy(entity) {
     copyEntity = entity
-    copyName.text = String(entity.title || "Плейлист") + " — копия"
+    copyName.text = String(entity.title || L.tr("Плейлист")) + L.tr(" — копия")
     copyDialog.open()
   }
 
@@ -298,7 +374,7 @@ Item {
           root.searchOperationId = String(result.operationId)
           root.searchAcknowledgementError = ""
         } else {
-          root.searchAcknowledgementError = root.logic.statusError || "Не удалось начать поиск"
+          root.searchAcknowledgementError = root.logic.statusError || L.tr("Не удалось начать поиск")
         }
       } else if (command === "suggestions"
                  && requestId === root.latestSuggestionRequestId
@@ -312,7 +388,7 @@ Item {
           root.suggestionOperationId = String(result.operationId)
           root.suggestionAcknowledgementError = ""
         } else {
-          root.suggestionAcknowledgementError = root.logic.statusError || "Не удалось получить подсказки"
+          root.suggestionAcknowledgementError = root.logic.statusError || L.tr("Не удалось получить подсказки")
         }
       } else if (command === "open_entity"
                  && requestId === root.latestEntityRequestId && root.showEntity) {
@@ -321,9 +397,9 @@ Item {
           root.entityOperationId = String(result.operationId)
           root.entityAcknowledgementError = ""
         } else {
-          root.entityAcknowledgementError = root.logic.statusError || "Не удалось открыть страницу"
+          root.entityAcknowledgementError = root.logic.statusError || L.tr("Не удалось открыть страницу")
         }
-      } else if ((command === "search_more" || command === "entity_more")
+      } else if ((command === "search_more" || command === "entity_more" || command === "entity_section")
                  && requestId === root.latestMoreRequestId
                  && String(payload.viewId || "") === root.moreRequestViewId
                  && root.moreRequestViewId === String(root.view.viewId || "")) {
@@ -332,7 +408,7 @@ Item {
           root.moreOperationId = String(result.operationId)
           root.moreAcknowledgementError = ""
         } else {
-          root.moreAcknowledgementError = root.logic.statusError || "Не удалось загрузить страницу"
+          root.moreAcknowledgementError = root.logic.statusError || L.tr("Не удалось загрузить страницу")
         }
       }
     }
@@ -353,45 +429,99 @@ Item {
       root.entityAcknowledgementError = ""
       root.moreAcknowledgementError = ""
       if (field.text.trim() !== "")
-        root.searchAcknowledgementError = "Сервис перезапущен; обновите выдачу"
+        root.searchAcknowledgementError = L.tr("Сервис перезапущен; обновите выдачу")
     }
   }
 
   Column {
     anchors.fill: parent
-    spacing: Style.space(6)
+    anchors.leftMargin: root.wideLayout && !root.isChannel ? Style.space(24) : 0
+    anchors.rightMargin: root.wideLayout && !root.isChannel ? Style.space(24) : 0
+    anchors.topMargin: root.wideLayout && !root.isChannel ? Style.space(20) : 0
+    anchors.bottomMargin: root.wideLayout && !root.isChannel ? Style.space(20) : 0
+    spacing: Style.space(16)
 
     Row {
+      visible: !root.showEntity
       width: parent.width
-      height: Style.space(36)
-      spacing: Style.space(4)
-      Button {
-        focusable: true
-        Accessible.name: tooltipText
+      height: visible ? Style.space(37) : 0
+      spacing: Style.space(8)
+
+      Item {
         id: sourceButton
         objectName: "sourceButton"
-        width: Style.space(48)
-        height: parent.height
-        text: root.source === "youtube" ? "YT" : "YTM"
-        tooltipText: root.source === "youtube" ? "Искать в YouTube" : "Искать в YouTube Music"
-        foreground: Color.accent
-        bordered: true
-        horizontalPadding: Style.space(4)
-        verticalPadding: 0
-        onClicked: {
-          root.latestSuggestionRequestId = 0
-          root.source = root.source === "youtube" ? "music" : "youtube"
-          root.filter = "all"
-          if (field.text.trim() !== "") root.search()
+        width: Style.space(76)
+        height: Style.space(35)
+        anchors.verticalCenter: parent.verticalCenter
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: root.source === "youtube" ? L.tr("Источник: YouTube") : L.tr("Источник: YouTube Music")
+        Keys.onReturnPressed: sourceMouse.clicked(null)
+        Rectangle {
+          anchors.fill: parent
+          color: sourceMouse.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .06) : "transparent"
+          border.width: Math.max(1, Style.space(1))
+          border.color: parent.activeFocus ? Color.accent : root.lineColor
+        }
+        Row {
+          anchors.centerIn: parent
+          spacing: Style.space(6)
+          Icon { anchors.verticalCenter: parent.verticalCenter; name: root.source === "youtube" ? "square-play" : "music"; size: Style.space(14); color: Color.accent }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.source === "youtube" ? "YT" : "YTM"
+            color: Color.accent
+            font.family: root.fontFamily
+            font.pixelSize: Style.space(11)
+          }
+          Icon { anchors.verticalCenter: parent.verticalCenter; name: "chevron-down"; size: Style.space(12); color: root.dim }
+        }
+        MouseArea {
+          id: sourceMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: {
+            root.latestSuggestionRequestId = 0
+            root.source = root.source === "youtube" ? "music" : "youtube"
+            root.filter = "all"
+            if (field.text.trim() !== "") root.search()
+          }
         }
       }
-      TextField {
-        objectName: "searchField"
-        id: field
-        width: parent.width - sourceButton.width - searchButton.width - parent.spacing * 2
+
+      Rectangle {
+        width: parent.width - sourceButton.width - parent.spacing
         height: parent.height
-        placeholderText: "Видео, плейлист или автор"
-        font.family: root.fontFamily
+        color: "transparent"
+        border.width: Math.max(1, Style.space(1))
+        border.color: field.activeFocus ? Color.accent : root.lineColor
+        Row {
+          anchors.fill: parent
+          anchors.leftMargin: Style.space(12)
+          anchors.rightMargin: Style.space(12)
+          spacing: Style.space(10)
+          Icon { anchors.verticalCenter: parent.verticalCenter; name: "search"; size: Style.space(14); color: root.dim }
+          TextInput {
+            objectName: "searchField"
+            id: field
+            width: parent.width - Style.space(24) - escHint.width - parent.spacing * 2
+            anchors.verticalCenter: parent.verticalCenter
+            color: root.foreground
+            selectionColor: Color.accent
+            font.family: root.fontFamily
+            font.pixelSize: Style.space(13)
+            clip: true
+            selectByMouse: true
+            Text {
+              visible: field.text === ""
+              anchors.fill: parent
+              verticalAlignment: Text.AlignVCenter
+              text: L.tr("Видео, плейлист или автор")
+              color: root.dim
+              font: field.font
+              elide: Text.ElideRight
+            }
         onAccepted: {
           if (suggestionsPanel.visible && root.selectedSuggestionIndex >= 0)
             root.chooseSuggestion(root.visibleSuggestions[root.selectedSuggestionIndex])
@@ -428,78 +558,137 @@ Item {
           root.suggestionAcknowledgementError = ""
           if (text.trim().length >= 2) suggestionDebounce.restart()
         }
-      }
-      Button {
-        focusable: true
-        Accessible.name: tooltipText
-        id: searchButton
-        objectName: "searchButton"
-        width: Style.space(36)
-        height: parent.height
-        iconText: "󰍉"
-        iconSize: Style.font.icon
-        tooltipText: "Найти"
-        foreground: root.foreground
-        bordered: true
-        enabled: field.text.trim() !== "" && !root.searchPending
-        opacity: enabled ? 1 : .4
-        horizontalPadding: 0
-        verticalPadding: 0
-        onClicked: root.search()
-      }
-    }
-
-    Row {
-      visible: !root.showEntity
-      width: parent.width
-      height: visible ? Style.space(30) : 0
-      spacing: Style.space(3)
-      Repeater {
-        model: root.filters
-        delegate: Button {
-          id: filterButton
-          required property var modelData
-          objectName: "filter-" + modelData.value
-          readonly property bool currentFilter: root.filter === modelData.value
-          width: (parent.width - parent.spacing * (root.filters.length - 1))
-            / root.filters.length
-          height: parent.height
-          text: modelData.label
-          selected: currentFilter
-          active: currentFilter
-          focusable: true
-          Accessible.name: text
-          foreground: currentFilter ? root.foreground : root.dim
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.space(3)
-          verticalPadding: 0
-          onClicked: {
-            root.latestSuggestionRequestId = 0
-            root.filter = modelData.value
-            if (field.text.trim() !== "") root.search()
+          }
+          Text {
+            id: escHint
+            anchors.verticalCenter: parent.verticalCenter
+            text: field.text === "" ? "" : "esc"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.space(10)
           }
         }
       }
     }
 
+    Item {
+      visible: !root.showEntity
+      width: parent.width
+      height: visible ? Style.space(32) : 0
+      Row {
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(6)
+        Repeater {
+          model: root.filters
+          delegate: Pill {
+            required property var modelData
+            objectName: "filter-" + modelData.value
+            anchors.verticalCenter: parent.verticalCenter
+            height: Style.space(27)
+            text: modelData.label.charAt(0) + modelData.label.slice(1).toLowerCase()
+            selected: root.filter === modelData.value
+            labelSize: 11
+            letterSpacing: 0
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onClicked: {
+              root.latestSuggestionRequestId = 0
+              root.filter = modelData.value
+              if (field.text.trim() !== "") root.search()
+            }
+          }
+        }
+      }
+      Row {
+        id: viewRow
+        visible: root.wideLayout
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(2)
+        Rectangle {
+          width: Style.space(32); height: Style.space(32)
+          color: root.gridMode ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1) : "transparent"
+          Icon { anchors.centerIn: parent; name: "layout-grid"; size: Style.space(14); color: root.gridMode ? root.foreground : root.dim }
+          MouseArea {
+            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+            onClicked: root.logic.request("setting", { key: "searchView", value: "grid" })
+          }
+        }
+        Rectangle {
+          width: Style.space(32); height: Style.space(32)
+          color: !root.gridMode ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1) : "transparent"
+          Icon { anchors.centerIn: parent; name: "list"; size: Style.space(14); color: !root.gridMode ? root.foreground : root.dim }
+          MouseArea {
+            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+            onClicked: root.logic.request("setting", { key: "searchView", value: "list" })
+          }
+        }
+      }
+    }
+
+    Text {
+      visible: !root.showEntity && root.query !== "" && root.rows.length > 0
+      text: L.tr("РЕЗУЛЬТАТЫ · ") + root.rows.length
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.space(10)
+      font.bold: true
+      font.letterSpacing: 1.5
+    }
+
     Row {
-      visible: root.showEntity
+      visible: root.showEntity && !root.isChannel
       width: parent.width
       height: visible ? Style.space(32) : 0
       spacing: Style.space(6)
-      Button {
-        focusable: true
-        Accessible.name: tooltipText
-        width: Style.space(32)
-        height: parent.height
-        iconText: "󰁍"
-        tooltipText: root.returnToCollection
-          ? "Назад в медиатеку" : "Назад к результатам поиска"
+      IconButton {
+        icon: "arrow-left"
+        iconSize: 14
+        tooltipText: root.entityStack.length > 0 ? L.tr("Назад: ") + String(root.entityStack[root.entityStack.length - 1].entity.title || "")
+          : (root.returnToCollection ? L.tr("Назад в медиатеку") : L.tr("Назад к результатам поиска"))
         foreground: root.foreground
-        horizontalPadding: 0
-        verticalPadding: 0
+        fontFamily: root.fontFamily
         onClicked: root.closeEntity()
+      }
+      Row {
+        id: crumbRow
+        visible: root.entityStack.length > 0
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(6)
+        Repeater {
+          model: root.entityStack.length > 0 ? root.crumbs : []
+          delegate: Row {
+            required property var modelData
+            spacing: Style.space(6)
+            Text {
+              id: crumbText
+              anchors.verticalCenter: parent.verticalCenter
+              width: Math.min(implicitWidth, Style.space(150))
+              textFormat: Text.PlainText
+              text: modelData.label
+              color: crumbMouse.containsMouse ? Color.accent : root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.space(11)
+              font.underline: crumbMouse.containsMouse
+              elide: Text.ElideRight
+              MouseArea {
+                id: crumbMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.popTo(modelData.depth)
+              }
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "›"
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.space(11)
+            }
+          }
+        }
       }
       Rectangle {
         id: entityCover
@@ -520,34 +709,71 @@ Item {
         }
       }
       Text {
-        width: parent.width - Style.space(38)
+        width: Math.max(0, parent.width - Style.space(38)
+          - (crumbRow.visible ? crumbRow.width + parent.spacing : 0)
           - (entityCover.visible ? entityCover.width + parent.spacing : 0)
-          - (copyEntityButton.visible ? copyEntityButton.width + parent.spacing : 0)
+          - (entityActions.visible ? entityActions.width + parent.spacing : 0))
         anchors.verticalCenter: parent.verticalCenter
-        text: String(root.entityView.entity ? root.entityView.entity.title : "Страница каталога")
+        text: String(root.entityView.entity ? root.entityView.entity.title : L.tr("Страница каталога"))
         color: root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.bodySmall
         font.bold: true
         elide: Text.ElideRight
       }
-      Button {
-        id: copyEntityButton
-        objectName: "copyEntityButton"
-        focusable: true
-        Accessible.name: tooltipText
-        visible: Boolean(root.entityView.entity)
-          && root.entityView.entity.kind === "playlist"
-          && root.entityView.entity.source !== "local"
-        width: visible ? Style.space(32) : 0
-        height: parent.height
-        iconText: "󰆏"
-        iconSize: Style.font.icon
-        tooltipText: "Скопировать в медиатеку"
-        foreground: Color.accent
-        horizontalPadding: 0
-        verticalPadding: 0
-        onClicked: root.beginCopy(root.entityView.entity)
+      Row {
+        id: entityActions
+        visible: Boolean(root.entityView.entity) && root.entityView.entity.kind === "playlist"
+        spacing: Style.space(6)
+        IconButton {
+          objectName: "playEntityButton"
+          icon: "play"
+          iconSize: 14
+          active: true
+          enabled: root.rows.some(function(row) { return Boolean(row.videoId) })
+          tooltipText: L.tr("Играть всё")
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: {
+            var first = root.rows.filter(function(row) { return row.videoId })[0]
+            if (first) root.logic.request("play_view", { viewId: root.view.viewId, entryId: first.videoId })
+          }
+        }
+        IconButton {
+          id: copyEntityButton
+          objectName: "copyEntityButton"
+          visible: Boolean(root.entityView.entity)
+            && root.entityView.entity.kind === "playlist"
+            && root.entityView.entity.source !== "local"
+          width: visible ? Style.space(32) : 0
+          icon: "copy"
+          iconSize: 14
+          active: true
+          tooltipText: L.tr("Скопировать в медиатеку")
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: root.beginCopy(root.entityView.entity)
+        }
+        IconButton {
+          icon: "link"
+          iconSize: 14
+          active: true
+          enabled: Boolean(root.entityView.entity && root.entityView.entity.canonicalUrl)
+          tooltipText: L.tr("Копировать ссылку")
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: Quickshell.execDetached(["wl-copy", String(root.entityView.entity.canonicalUrl)])
+        }
+        IconButton {
+          icon: "external-link"
+          iconSize: 14
+          active: true
+          enabled: Boolean(root.entityView.entity && root.entityView.entity.canonicalUrl)
+          tooltipText: L.tr("Открыть в браузере")
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: Quickshell.execDetached(["xdg-open", String(root.entityView.entity.canonicalUrl)])
+        }
       }
     }
 
@@ -569,31 +795,25 @@ Item {
         anchors.centerIn: parent
         width: parent.width - Style.space(32)
         spacing: Style.space(8)
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          text: "󰅚"
-          color: Color.urgent
-          font.family: root.fontFamily
-          font.pixelSize: Style.space(25)
-        }
+        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "triangle-alert"; size: Style.space(26); color: Color.urgent }
         Text {
           width: parent.width
           text: root.failure && root.failure.error
-            ? String(root.failure.error.message || "Каталог недоступен") : "Каталог недоступен"
+            ? L.tb(root.failure.error.message || L.tr("Каталог недоступен")) : L.tr("Каталог недоступен")
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
         }
-        Button {
-          focusable: true
-          Accessible.name: text
+        Pill {
           anchors.horizontalCenter: parent.horizontalCenter
-          text: "Повторить"
-          iconText: "󰑐"
-          foreground: Color.accent
-          bordered: true
+          height: Style.space(31)
+          text: L.tr("ПОВТОРИТЬ")
+          icon: "rotate-cw"
+          selected: true
+          foreground: root.foreground
+          fontFamily: root.fontFamily
           onClicked: root.retryFailure()
         }
       }
@@ -603,29 +823,36 @@ Item {
         anchors.centerIn: parent
         width: parent.width - Style.space(32)
         spacing: Style.space(6)
-        Text {
-          anchors.horizontalCenter: parent.horizontalCenter
-          text: root.query === "" ? "󰍉" : "󰅐"
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.space(25)
-        }
+        Icon { anchors.horizontalCenter: parent.horizontalCenter; name: root.query === "" ? "search" : "search-x"; size: Style.space(26); color: root.dim }
         Text {
           width: parent.width
-          text: root.query === "" ? "Найдите видео, музыку или канал"
-            : "По запросу «" + root.query + "» ничего не найдено"
+          text: root.query === "" ? L.tr("Найдите видео, музыку или канал")
+            : L.tr("По запросу «") + root.query + L.tr("» ничего не найдено")
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.font.caption
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
         }
+        Pill {
+          visible: root.query !== "" && root.layoutFix !== root.query
+          anchors.horizontalCenter: parent.horizontalCenter
+          height: Style.space(31)
+          text: L.tr("Искать «") + root.layoutFix + L.tr("» (другая раскладка)")
+          icon: "keyboard"
+          selected: true
+          letterSpacing: 0
+          labelSize: 11
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onClicked: { field.text = root.layoutFix; root.search() }
+        }
       }
 
       ListView {
         id: results
         visible: !root.loading && root.failure === null && root.rows.length > 0
-          && suggestionsPanel.height === 0
+          && suggestionsPanel.height === 0 && !root.gridMode && !root.isChannel
         anchors.fill: parent
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -634,6 +861,7 @@ Item {
         model: root.rows
         onContentYChanged: if (!root.showEntity) root.savedContentY = contentY
         delegate: MediaRow {
+          logic: root.logic
           onFocusRequested: results.positionViewAtIndex(index, ListView.Contain)
           required property var modelData
           required property int index
@@ -645,33 +873,76 @@ Item {
           onPlayRequested: row => root.logic.request("play_view", { viewId: root.view.viewId, entryId: row.videoId })
           onNextRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "next" })
           onEndRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
-          onOpenRequested: entity => {
-            root.returnToCollection = false
-            root.openEntity(entity)
-          }
+          onOpenRequested: entity => root.pushEntity(entity)
           onSaveRequested: row => row.videoId
             ? root.logic.request("save_media", { media: row, saved: true })
             : root.logic.request("save_entity", { entity: row, saved: true })
           onPlaylistRequested: media => root.playlistPickerRequested(media)
+          onChannelRequested: entity => root.pushEntity(entity)
+          commandsEnabled: true
+          prefetchOnHover: true
+          onCommandRequested: (command, payload) => root.logic.request(command, payload)
           onCopyRequested: entity => root.beginCopy(entity)
         }
-        footer: Button {
-          focusable: true
-          Accessible.name: text
-          visible: root.hasMore(root.view) || root.loadingMore
-            || root.moreFailure !== null
-          width: results.width
-          height: visible ? Style.space(38) : 0
-          text: root.loadingMore ? "Загружаем…"
-            : (root.moreFailure && root.moreFailure.error
-               && String(root.moreFailure.error.code || "") === "cursor_expired"
-              ? "Обновить выдачу"
-              : (root.moreFailure ? "Повторить загрузку" : "Загрузить ещё"))
-          foreground: Color.accent
-          enabled: !root.loadingMore && !root.morePending
-          onClicked: root.moreFailure ? root.retryMore() : root.requestMore()
-        }
+        footer: moreFooter
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+      }
+
+      GridView {
+        id: grid
+        visible: !root.loading && root.failure === null && root.rows.length > 0
+          && suggestionsPanel.height === 0 && root.gridMode && !root.isChannel
+        anchors.fill: parent
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        cacheBuffer: height * 2
+        cellWidth: root.cardWidth
+        cellHeight: Math.round((root.cardWidth - Style.space(16)) * 9 / 16) + Style.space(70)
+        model: root.rows
+        onContentYChanged: if (!root.showEntity && visible) root.savedContentY = contentY
+        delegate: Item {
+          required property var modelData
+          width: grid.cellWidth
+          height: grid.cellHeight
+          MediaCard {
+            logic: root.logic
+            width: parent.width - Style.space(16)
+            height: parent.height - Style.space(20)
+            item: modelData
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onPlayRequested: row => root.logic.request("play_view", { viewId: root.view.viewId, entryId: row.videoId })
+            onEndRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
+            onOpenRequested: entity => root.pushEntity(entity)
+            onPlaylistRequested: media => root.playlistPickerRequested(media)
+            onPrefetchRequested: videoId => root.logic.request("prefetch", { videoId: videoId })
+            onChannelRequested: entity => root.pushEntity(entity)
+            onCopyRequested: entity => root.beginCopy(entity)
+          }
+        }
+        footer: moreFooter
+        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+      }
+
+      ChannelPage {
+        id: channelPage
+        visible: !root.loading && root.failure === null && root.isChannel
+        anchors.fill: parent
+        logic: root.logic
+        view: root.view
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onBackRequested: root.closeEntity()
+        onPlayVideo: row => root.logic.request("play_view", { viewId: root.view.viewId, entryId: row.videoId })
+        onEnqueueVideo: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
+        onPlaylistPickerRequested: media => root.playlistPickerRequested(media)
+        onOpenRequested: entity => root.pushEntity(entity)
+        onLoadMoreRequested: root.requestMore()
+        onSectionRequested: (tab, sort) => root.requestSection(tab, sort)
+        onCopyRequested: entity => root.beginCopy(entity)
+        initialTab: root.restoreTab
+        backLabel: root.entityStack.length > 0
+          ? String(root.entityStack[root.entityStack.length - 1].entity.title || root.baseLabel).toUpperCase() : root.baseLabel
       }
 
       Rectangle {
@@ -740,6 +1011,26 @@ Item {
     }
   }
 
+  Component {
+    id: moreFooter
+    Button {
+          focusable: true
+          Accessible.name: text
+          visible: root.hasMore(root.view) || root.loadingMore
+            || root.moreFailure !== null
+          width: resultsViewport.width
+          height: visible ? Style.space(38) : 0
+          text: root.loadingMore ? L.tr("Загружаем…")
+            : (root.moreFailure && root.moreFailure.error
+               && String(root.moreFailure.error.code || "") === "cursor_expired"
+              ? L.tr("Обновить выдачу")
+              : (root.moreFailure ? L.tr("Повторить загрузку") : L.tr("Загрузить ещё")))
+          foreground: Color.accent
+          enabled: !root.loadingMore && !root.morePending
+          onClicked: root.moreFailure ? root.retryMore() : root.requestMore()
+        }
+  }
+
   Timer {
     id: suggestionDebounce
     interval: 300
@@ -749,11 +1040,11 @@ Item {
 
   Dialog {
     id: copyDialog
-    title: "Создать локальную копию"
+    title: L.tr("Создать локальную копию")
     modal: true
     width: Style.space(360)
     standardButtons: Dialog.Ok | Dialog.Cancel
-    contentItem: TextField { id: copyName; placeholderText: "Название локального плейлиста" }
+    contentItem: TextField { id: copyName; placeholderText: L.tr("Название локального плейлиста") }
     onAccepted: if (root.copyEntity)
       root.logic.request("playlist_copy", { entity: root.copyEntity, name: copyName.text })
   }

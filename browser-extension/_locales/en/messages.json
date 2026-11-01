@@ -1,0 +1,311 @@
+{
+  "extName": {
+    "message": "OmaTube — watch in the Omarchy player"
+  },
+  "extDescription": {
+    "message": "Adds a “Watch in OmaTube” button to YouTube that continues the video from the same moment in the OmaTube plugin for Omarchy."
+  },
+  "actionTitle": {
+    "message": "OmaTube"
+  },
+  "commandSend": {
+    "message": "Send the current video to OmaTube"
+  },
+  "btnWatch": {
+    "message": "Watch in OmaTube"
+  },
+  "btnMore": {
+    "message": "More OmaTube options"
+  },
+  "menuNow": {
+    "message": "Play now"
+  },
+  "menuNext": {
+    "message": "Play next"
+  },
+  "menuEnd": {
+    "message": "Play last"
+  },
+  "toastSending": {
+    "message": "Sending to OmaTube…"
+  },
+  "toastSentAt": {
+    "message": "Continuing in OmaTube from $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "toastSent": {
+    "message": "Sent to OmaTube"
+  },
+  "toastQueuedNext": {
+    "message": "Up next in OmaTube"
+  },
+  "toastQueuedEnd": {
+    "message": "Will play last in OmaTube"
+  },
+  "toastRetry": {
+    "message": "Retry"
+  },
+  "toastNoVideo": {
+    "message": "No video found on this page"
+  },
+  "errHostMissing": {
+    "message": "The OmaTube bridge is not installed. Run in a terminal: omatube browser-setup"
+  },
+  "errHostForbidden": {
+    "message": "OmaTube does not recognise this extension. Run: omatube browser-setup"
+  },
+  "errHostCrashed": {
+    "message": "The OmaTube bridge exited with an error"
+  },
+  "errBackendDown": {
+    "message": "The OmaTube service is not running"
+  },
+  "errDisabled": {
+    "message": "Receiving videos from the browser is turned off in OmaTube settings"
+  },
+  "errGeneric": {
+    "message": "Could not send: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "ctxLink": {
+    "message": "Watch in OmaTube"
+  },
+  "popupChecking": {
+    "message": "Checking connection…"
+  },
+  "popupOk": {
+    "message": "Connected to OmaTube"
+  },
+  "popupOkVia": {
+    "message": "Connected via $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popupDown": {
+    "message": "OmaTube is not running — it starts on send"
+  },
+  "popupDisabled": {
+    "message": "Receiving is off in OmaTube settings"
+  },
+  "popupMissing": {
+    "message": "Bridge is not installed"
+  },
+  "popupSetupHint": {
+    "message": "Run in a terminal:"
+  },
+  "popupNowPlaying": {
+    "message": "Now in OmaTube"
+  },
+  "popupNothing": {
+    "message": "Nothing is playing"
+  },
+  "popupNoTab": {
+    "message": "Open a YouTube video to send it"
+  },
+  "popupSettings": {
+    "message": "Settings"
+  },
+  "popupVersionMismatch": {
+    "message": "Extension ($P1$) and OmaTube ($P2$) versions differ. Reload the extension in the browser's extension settings.",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "popupLastError": {
+    "message": "Last error"
+  },
+  "optTitle": {
+    "message": "OmaTube — extension settings"
+  },
+  "optTransfer": {
+    "message": "Transfer"
+  },
+  "optDefaultAction": {
+    "message": "Main button action"
+  },
+  "optAfter": {
+    "message": "After transfer"
+  },
+  "optAfterClose": {
+    "message": "Close the tab"
+  },
+  "optAfterPause": {
+    "message": "Pause and keep the tab"
+  },
+  "optRewind": {
+    "message": "Rewind before continuing"
+  },
+  "optRewindHint": {
+    "message": "So you don't miss a few seconds while OmaTube loads the stream."
+  },
+  "optNone": {
+    "message": "None"
+  },
+  "optSeconds": {
+    "message": "$P1$ s",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "optButton": {
+    "message": "Button"
+  },
+  "optPlacement": {
+    "message": "Where to show it on a video page"
+  },
+  "optPlacementActions": {
+    "message": "Below the video"
+  },
+  "optPlacementPlayer": {
+    "message": "In the player bar"
+  },
+  "optPlacementBoth": {
+    "message": "Both"
+  },
+  "optShorts": {
+    "message": "Show on Shorts"
+  },
+  "optMusic": {
+    "message": "Show on YouTube Music"
+  },
+  "optContextMenu": {
+    "message": "“Watch in OmaTube” in the link context menu"
+  },
+  "optShortcut": {
+    "message": "Keyboard shortcut"
+  },
+  "optShortcutCurrent": {
+    "message": "Current: $P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "optShortcutNone": {
+    "message": "not set"
+  },
+  "optShortcutChange": {
+    "message": "Change"
+  },
+  "optConnection": {
+    "message": "OmaTube connection"
+  },
+  "optCheck": {
+    "message": "Check connection"
+  },
+  "optPluginHint": {
+    "message": "Video mode for transferred videos and notifications are configured in OmaTube → Settings → Browser."
+  },
+  "thumbQueue": {
+    "message": "Play last in OmaTube (right-click for more)"
+  },
+  "optThumbnails": {
+    "message": "“Play last in OmaTube” button on video thumbnails"
+  },
+  "optThumbnailsHint": {
+    "message": "Appears in the thumbnail corner on hover. Click puts the video at the end of My queue, right-click offers “Play now” or “Play next”. The tab stays open."
+  },
+  "optSaved": {
+    "message": "Saved"
+  },
+  "btnQueued": {
+    "message": "In queue · #$P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "markNow": {
+    "message": "Playing"
+  },
+  "markNext": {
+    "message": "Next"
+  },
+  "markTip": {
+    "message": "#$P1$ of $P2$ in the OmaTube queue",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "markEta": {
+    "message": "starts in ~$P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "markRemove": {
+    "message": "click to remove from queue"
+  },
+  "toastRemoved": {
+    "message": "Removed from the OmaTube queue"
+  },
+  "toastQueuedAt": {
+    "message": "Added to the queue · #$P1$ of $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "unitMin": {
+    "message": "min"
+  },
+  "menuNextMove": {
+    "message": "Play next · move"
+  },
+  "menuEndHere": {
+    "message": "Play last · already #$P1$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      }
+    }
+  },
+  "menuRemove": {
+    "message": "Remove from queue"
+  },
+  "toastMovedTo": {
+    "message": "Moved in the queue · #$P1$ of $P2$",
+    "placeholders": {
+      "p1": {
+        "content": "$1"
+      },
+      "p2": {
+        "content": "$2"
+      }
+    }
+  },
+  "toastAlreadyThere": {
+    "message": "Already in that place in the queue"
+  }
+}

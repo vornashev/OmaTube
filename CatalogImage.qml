@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Ui
+import "i18n.js" as L
 
 Image {
   id: root
@@ -11,13 +12,20 @@ Image {
   property int maxRetryAttempts: 3
   property int retryAttempt: 0
   property int retryNonce: 0
+  property int proxyPort: 47865
+  readonly property bool sized: width > 0 || height > 0
+  readonly property int widthBucket: width <= 0 ? 0 : (width <= 340 ? 320 : 0)
   readonly property string normalizedSource: normalizeSource(requestedSource)
+  // Thumbnails go through the backend's local cache (disk cache, keep-alive, proxy);
+  // after the first failure the image is fetched straight from YouTube instead.
+  readonly property bool proxied: retryAttempt === 0 && /^https:\/\/(i\.ytimg\.com|yt3\.ggpht\.com|yt3\.googleusercontent\.com)\//.test(normalizedSource)
+  readonly property string loadSource: proxied ? "http://127.0.0.1:" + proxyPort + "/img?w=" + widthBucket + "&u=" + encodeURIComponent(normalizedSource) : normalizedSource
   readonly property bool retrying: retryTimer.running
   readonly property bool exhausted: requestedSource !== "" && status === Image.Error
     && !retrying && retryAttempt >= maxRetryAttempts
 
-  source: normalizedSource === "" ? "" : normalizedSource
-    + (normalizedSource.indexOf("?") >= 0 ? "&" : "?")
+  source: loadSource === "" || (proxied && !sized) ? "" : loadSource
+    + (loadSource.indexOf("?") >= 0 ? "&" : "?")
     + "omatubeRetry=" + retryNonce
   asynchronous: true
   cache: true
@@ -81,9 +89,9 @@ Image {
   }
   PanelToolTip {
     visible: imageStatusMouse.containsMouse && (root.status === Image.Loading || root.retrying || root.exhausted)
-    text: root.exhausted ? "Обложка недоступна после " + root.maxRetryAttempts + " повторов"
-      : (root.retrying ? "Повтор загрузки обложки · попытка " + root.retryAttempt
-      : "Загружаем обложку")
+    text: root.exhausted ? L.tr("Обложка недоступна после ") + root.maxRetryAttempts + L.tr(" повторов")
+      : (root.retrying ? L.tr("Повтор загрузки обложки · попытка ") + root.retryAttempt
+      : L.tr("Загружаем обложку"))
     fontFamily: root.fontFamily
   }
 

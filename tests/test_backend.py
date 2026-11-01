@@ -159,6 +159,86 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
             await self.backend.command({"command": "video_quality", "value": 800})
         self.assertEqual(raised.exception.code, "invalid_request")
 
+    async def test_panel_preferences_validate_choices_and_onboarding_flag(self):
+        preferences = self.backend.status()["preferences"]
+        self.assertEqual((preferences["panelFormat"], preferences["searchView"], preferences["onboarded"]), ("wide", "grid", False))
+        await self.backend.command({"command": "setting", "key": "panelFormat", "value": "compact"})
+        await self.backend.command({"command": "setting", "key": "searchView", "value": "list"})
+        await self.backend.command({"command": "setting", "key": "onboarded", "value": True})
+        preferences = self.backend.status()["preferences"]
+        self.assertEqual((preferences["panelFormat"], preferences["searchView"], preferences["onboarded"]), ("compact", "list", True))
+        for key, value in (("panelFormat", "tower"), ("searchView", 1), ("onboarded", "yes")):
+            with self.assertRaises(OmaTubeError) as raised:
+                await self.backend.command({"command": "setting", "key": key, "value": value})
+            self.assertEqual(raised.exception.code, "invalid_request")
+
+    async def test_play_url_from_browser_uses_start_hints_and_preferences(self):
+        replace = AsyncMock(return_value={"entryId": "e"})
+        with patch.object(self.backend.player, "replace", replace):
+            await self.backend.command({
+                "command": "play_url", "url": "https://www.youtube.com/watch?v=BaW_jenozKc&t=30",
+                "start": 312.5, "origin": "browser",
+                "media": {"title": "  Real title ", "author": "Channel", "duration": 900, "thumbnailUrl": "https://evil.invalid"},
+            })
+            media, start = replace.await_args.args
+            self.assertEqual(start, 312.5)
+            self.assertEqual((media["title"], media["author"], media["duration"], media["thumbnailUrl"]), ("Real title", "Channel", 900.0, None))
+            await self.backend.command({"command": "play_url", "url": "https://youtu.be/BaW_jenozKc?t=1m"})
+            self.assertEqual(replace.await_args.args[1], 60.0)
+            await self.backend.command({"command": "setting", "key": "browserVideoMode", "value": "floating"})
+            await self.backend.command({"command": "play_url", "url": "https://youtu.be/BaW_jenozKc", "origin": "browser"})
+            self.assertEqual(self.backend.player.video_mode, "floating")
+        with self.assertRaises(OmaTubeError) as raised:
+            await self.backend.command({"command": "play_url", "url": "https://youtu.be/BaW_jenozKc", "start": -1})
+        self.assertEqual(raised.exception.code, "invalid_request")
+        await self.backend.command({"command": "setting", "key": "browserAccept", "value": False})
+        with self.assertRaises(OmaTubeError) as raised:
+            await self.backend.command({"command": "play_url", "url": "https://youtu.be/BaW_jenozKc", "origin": "browser"})
+        self.assertEqual(raised.exception.code, "disabled")
+
+    async def test_enqueue_url_keeps_start_for_later(self):
+        entry = await self.backend.command({"command": "enqueue_url", "url": "https://youtu.be/BaW_jenozKc", "start": 40, "placement": "end"})
+        self.assertEqual(entry["startAt"], 40.0)
+
+    async def test_enqueue_bare_url_hydrates_in_background_without_failing(self):
+        async def hydrate(entry_id): return None
+        self.backend.player.hydrate_entry = hydrate
+        entry = await self.backend.command({"command": "enqueue_url", "url": "https://youtu.be/BaW_jenozKc", "placement": "end"})
+        self.assertEqual(entry["media"]["videoId"], "BaW_jenozKc")
+        await asyncio.gather(*self.backend.maintenance_tasks)
+
+    async def test_subscribe_syncs_feed_in_background_and_reports_new_count(self):
+        from backend.feed import parse_feed
+        from test_feed import ATOM
+        async def fetch(channel_id): return parse_feed(ATOM)
+        self.backend.feed_service.fetch = fetch
+        await self.backend.command({"command": "subscribe", "channel": {"id": "UC1", "title": "kuji", "kind": "channel", "source": "youtube"}})
+        await asyncio.gather(*self.backend.maintenance_tasks)
+        feed = await self.backend.command({"command": "feed"})
+        self.assertEqual(len(feed["items"]), 2)
+        self.assertEqual(self.backend.status()["newCount"], 0)
+        self.assertEqual((await self.backend.command({"command": "is_subscribed", "channelId": "UC1"}))["subscribed"], True)
+        self.assertEqual(await self.backend.command({"command": "progress", "videoIds": ["AAAAAAAAAAA"]}), {"progress": {}})
+        await self.backend.command({"command": "unsubscribe", "channelId": "UC1"})
+        self.assertEqual((await self.backend.command({"command": "subscriptions"}))["items"], [])
+
+    async def test_speed_sleep_timer_and_audio_options(self):
+        status = await self.backend.command({"command": "speed", "value": 1.5})
+        self.assertEqual(status["speed"], 1.5)
+        with self.assertRaises(OmaTubeError):
+            await self.backend.command({"command": "speed", "value": 9})
+        status = await self.backend.command({"command": "sleep_timer", "mode": "after_track"})
+        self.assertEqual(status["sleepTimer"]["mode"], "after_track")
+        status = await self.backend.command({"command": "sleep_timer", "mode": "timer", "minutes": 30})
+        self.assertEqual(status["sleepTimer"]["mode"], "timer")
+        self.assertIsNotNone(status["sleepTimer"]["endsAt"])
+        status = await self.backend.command({"command": "sleep_timer", "mode": "off"})
+        self.assertIsNone(status["sleepTimer"])
+        with self.assertRaises(OmaTubeError):
+            await self.backend.command({"command": "sleep_timer", "mode": "timer", "minutes": 0})
+        await self.backend.command({"command": "setting", "key": "normalize", "value": True})
+        self.assertTrue(self.backend.player.normalize)
+
     async def test_details_omits_unchanged_sections_and_detects_new_session(self):
         self.backend.player.queue = [{"entryId": "one", "media": {"videoId": "one"}}]
         self.backend.player.queue_revision = 4

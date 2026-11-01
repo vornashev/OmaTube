@@ -1,0 +1,202 @@
+/* Styles for buttons injected into YouTube pages. Colours follow YouTube's own theme variables. */
+.omatube-split {
+  display: inline-flex;
+  min-width: max-content;
+  align-items: stretch;
+  height: 36px;
+  margin-right: 8px;
+  border-radius: 18px;
+  overflow: hidden;
+  flex: none;
+  background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, .05));
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  font: 500 14px/36px Roboto, Arial, sans-serif;
+}
+.omatube-split button,
+.omatube-menu-item,
+.omatube-toast-action {
+  border: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.omatube-split-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+}
+.omatube-split-more {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-left: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, .1)) !important;
+}
+.omatube-split-main:hover,
+.omatube-split-more:hover { background: var(--yt-spec-button-chip-background-hover, rgba(0, 0, 0, .1)); }
+.omatube-split button:focus-visible,
+.omatube-icon:focus-visible,
+.omatube-menu-item:focus-visible { outline: 2px solid #3ea6ff; outline-offset: -2px; }
+
+.omatube-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+/* Player bar: sits among .ytp-button controls. */
+.omatube-ytp { width: 48px; height: 100%; color: #fff; opacity: .9; vertical-align: top; }
+.omatube-ytp:hover { opacity: 1; }
+/* Shorts action column: round button like like/dislike. */
+.omatube-round {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, .05));
+  color: var(--yt-spec-text-primary, #0f0f0f);
+}
+.omatube-round:hover { background: var(--yt-spec-button-chip-background-hover, rgba(0, 0, 0, .1)); }
+.omatube-music { width: 40px; height: 40px; margin: 0 4px; border-radius: 50%; color: #fff; opacity: .7; }
+.omatube-music:hover { opacity: 1; background: rgba(255, 255, 255, .1); }
+
+.omatube-menu {
+  position: fixed;
+  z-index: 2300;
+  min-width: 236px;
+  padding: 8px 0;
+  border-radius: 12px;
+  background: var(--yt-spec-menu-background, #fff);
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  box-shadow: 0 4px 32px rgba(0, 0, 0, .2);
+  font: 400 14px/20px Roboto, Arial, sans-serif;
+}
+.omatube-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+}
+.omatube-menu-item:hover { background: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, .1)); }
+.omatube-menu-item.omatube-default { font-weight: 500; }
+
+.omatube-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 2400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 8px;
+  transform: translateX(-50%);
+  background: #28282f;
+  color: #f1f1f1;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .3);
+  font: 400 14px/20px Roboto, Arial, sans-serif;
+  animation: omatube-in .16s ease-out;
+}
+.omatube-toast svg { flex: none; }
+.omatube-toast.omatube-success svg { color: #7bd88f; }
+.omatube-toast.omatube-error svg { color: #ff7b72; }
+.omatube-toast-action {
+  margin-left: 8px;
+  padding: 0 4px;
+  color: #3ea6ff;
+  font-weight: 500;
+  white-space: nowrap;
+}
+@keyframes omatube-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .omatube-toast { animation: none; } }
+
+/* Floating "add to queue" button over the hovered thumbnail (and YouTube's inline preview). */
+.omatube-thumb {
+  position: fixed;
+  z-index: 2200;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(15, 15, 15, .8);
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .35);
+}
+.omatube-thumb:hover { background: rgba(15, 15, 15, .95); }
+/* "+" badge marks the button as "add to queue" rather than "play". */
+.omatube-thumb::after {
+  content: "+";
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ff4e45;
+  color: #fff;
+  font: 700 12px/14px Roboto, Arial, sans-serif;
+  text-align: center;
+}
+.omatube-thumb.omatube-done::after { content: none; }
+.omatube-thumb:disabled { opacity: .6; cursor: progress; }
+.omatube-thumb.omatube-done { color: #7bd88f; }
+.omatube-thumb[hidden] { display: none; }
+
+/* Queue mark: replaces the "add" button on thumbnails of videos that are already in the OmaTube queue. */
+.omatube-marked { position: relative; }
+.omatube-mark {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  min-width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1.5px solid #7bd88f;
+  background: rgba(15, 15, 15, .8);
+  color: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .35);
+  font: 700 14px/1 Roboto, Arial, sans-serif;
+}
+.omatube-mark:hover { background: rgba(15, 15, 15, .95); }
+.omatube-mark:not(.omatube-mark-now):hover { border-color: #ff7b72; }
+.omatube-mark.omatube-mark-now { cursor: default; }
+.omatube-mark.omatube-mark-wide { font-weight: 500; font-size: 12px; }
+.omatube-mark svg { color: #7bd88f; }
+/* Check badge on numbered marks, like the "+" badge on the add button. */
+.omatube-mark:not(.omatube-mark-wide)::after {
+  content: "✓";
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #7bd88f;
+  color: #0f0f0f;
+  font: 700 10px/14px Roboto, Arial, sans-serif;
+  text-align: center;
+}
+.omatube-split-main.omatube-queued svg { color: #7bd88f; }
+.omatube-menu-item.omatube-here { color: #7bd88f; font-weight: 700; }
+.omatube-menu-item.omatube-danger { color: #ff7b72; }
+
+/* YouTube's theme variables are not always defined where the button is injected: keep it readable without them. */
+.omatube-split { background: var(--yt-spec-badge-chip-background, rgba(0, 0, 0, .05)); color: var(--yt-spec-text-primary, #0f0f0f); }
+html[dark] .omatube-split { background: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, .1)); color: var(--yt-spec-text-primary, #f1f1f1); }
+.omatube-split-main span { display: inline; white-space: nowrap; color: inherit; font-size: 14px; }
+.omatube-split-more svg { display: block; }
+/* The menu is appended to <body>, where YouTube's dark-theme variables may be missing: without this it falls back to white. */
+html[dark] .omatube-menu { background: var(--yt-spec-menu-background, #282828); color: var(--yt-spec-text-primary, #f1f1f1); }
+html[dark] .omatube-menu-item:hover { background: var(--yt-spec-10-percent-layer, rgba(255, 255, 255, .1)); }

@@ -1,10 +1,12 @@
 import asyncio
-from typing import Any
+from typing import Any, Callable
 
 from dbus_next import Variant
 from dbus_next.aio import MessageBus
 from dbus_next.constants import PropertyAccess
 from dbus_next.service import ServiceInterface, dbus_property, method, signal
+
+from .i18n import TEXT, text
 
 
 class MprisRoot(ServiceInterface):
@@ -39,8 +41,13 @@ class MprisRoot(ServiceInterface):
 
 
 class MprisPlayer(ServiceInterface):
-    def __init__(self, player: Any) -> None:
-        super().__init__("org.mpris.MediaPlayer2.Player"); self.player = player
+    def __init__(self, player: Any, language: Callable[[], object] = lambda: "auto") -> None:
+        super().__init__("org.mpris.MediaPlayer2.Player"); self.player = player; self.language = language
+
+    def _author(self, media: dict[str, Any]) -> str:
+        # The stored placeholder is Russian; show it in the selected language.
+        author = str(media.get("author") or "")
+        return author if author and author != TEXT["unknown_author"]["ru"] else text("unknown_author", self.language())
 
     @method()
     async def Next(self): await self.player.next(True)
@@ -109,7 +116,7 @@ class MprisPlayer(ServiceInterface):
         data = {
             "mpris:trackid": Variant("o", self._track_id(current["entryId"])),
             "xesam:title": Variant("s", str(media.get("title") or media.get("videoId") or "OmaTube")),
-            "xesam:artist": Variant("as", [str(media.get("author") or "Автор неизвестен")]),
+            "xesam:artist": Variant("as", [self._author(media)]),
             "xesam:url": Variant("s", str(media.get("canonicalUrl") or "")),
         }
         if media.get("thumbnailUrl"): data["mpris:artUrl"] = Variant("s", str(media["thumbnailUrl"]))
@@ -162,8 +169,8 @@ class MprisPlayer(ServiceInterface):
 
 
 class MprisBridge:
-    def __init__(self, player: Any) -> None:
-        self.player = player; self.bus: MessageBus | None = None; self.interface = MprisPlayer(player)
+    def __init__(self, player: Any, language: Callable[[], object] = lambda: "auto") -> None:
+        self.player = player; self.bus: MessageBus | None = None; self.interface = MprisPlayer(player, language)
 
     async def start(self) -> None:
         self.bus = await MessageBus().connect()

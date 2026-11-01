@@ -10,7 +10,7 @@ UNIT="$HOME/.config/systemd/user/omatube.service"
 if command -v jq >/dev/null; then
   VERSION="$(jq -er '.version' "$ROOT/manifest.json")"
   if [[ -r "$MARKER" && "$(<"$MARKER")" == "$VERSION" &&
-        -x "$APP/.venv/bin/python" && -f "$APP/backend/main.py" &&
+        -x "$APP/.venv/bin/python" && -f "$APP/backend/main.py" && -x "$APP/bin/omatube-native-host" &&
         -x "$HOME/.local/bin/omatube" && -f "$UNIT" ]]; then
     systemctl --user daemon-reload
     systemctl --user enable --now omatube.service >/dev/null

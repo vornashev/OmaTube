@@ -6,18 +6,23 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=%h/.local/share/omatube/app/.venv/bin/python -m backend.main --app-root %h/.local/share/omatube/app
+# Register the browser bridge for browsers installed since the last start. "+" lifts ProtectHome for this
+# step only (it writes manifests under ~/.config and ~/.mozilla); "-" keeps a failure from stopping the service.
+ExecStartPost=-+%h/.local/bin/omatube browser-setup --quiet
 WorkingDirectory=%h/.local/share/omatube/app
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=/usr/local/bin:/usr/bin
 Restart=on-failure
 RestartSec=3
 KillMode=control-group
+RuntimeDirectory=omatube
+RuntimeDirectoryMode=0700
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadOnlyPaths=%h/.local/share/omatube/app
-ReadWritePaths=%h/.local/share/omatube %h/.config/omatube %t/omatube %t/pipewire-0
+ReadWritePaths=%h/.local/share/omatube %h/.config/omatube %h/Videos/OmaTube %t/omatube %t/pipewire-0
 
 [Install]
 WantedBy=default.target

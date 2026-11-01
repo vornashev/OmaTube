@@ -2,12 +2,18 @@
 import { Innertube, UniversalCache, Log } from 'youtubei.js';
 import { randomUUID } from 'node:crypto';
 import readline from 'node:readline';
+import { AsyncLocalStorage } from 'node:async_hooks';
 Log.setLevel(Log.Level.ERROR);
 
 const MAX_LINE = 8 * 1024 * 1024;
 const CURSOR_TTL_MS = 15 * 60 * 1000;
 const MAX_IDLE_CURSORS = 32;
 const cursors = new Map();
+const collector = new AsyncLocalStorage();
+const responseCache = new Map();
+const FRESH_MS = { related: 900e3, search: 180e3, open: 300e3, channel_section: 300e3, comments: 600e3, suggestions: 1800e3 };
+const STALE_MS = 24 * 3600e3;
+const MAX_CACHED = 60;
 let client;
 let clientPromise;
 
@@ -139,10 +145,9 @@ function normalizeNode(node, source, requestedKind = null) {
 }
 
 function contentRows(page) {
-  const candidates = [page?.results, page?.contents, page?.contents?.contents, page?.videos, page?.items,
+  const candidates = [page?.results, page?.contents, page?.contents?.contents, page?.videos, page?.playlists, page?.items,
     page?.page?.contents, page?.content?.contents, page?.header?.contents];
-  for (const rows of candidates) if (Array.isArray(rows)) return rows;
-  return [];
+  return candidates.find(rows => Array.isArray(rows) && rows.length) ?? candidates.find(Array.isArray) ?? [];
 }
 function expandRows(rows, depth = 0) {
   if (depth > 4) return [];
@@ -180,6 +185,7 @@ function storeCursor(page, context) {
   if (!hasContinuation(page)) return null;
   const cursor = randomUUID();
   cursors.set(cursor, { page, context, touched: Date.now(), inFlight: null, lastResult: null });
+  collector.getStore()?.push(cursor);
   pruneCursors();
   return cursor;
 }
@@ -255,6 +261,32 @@ async function next({ cursor }) {
   return state.inFlight;
 }
 
+const flatText = value => {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.text === 'string') return value.text;
+  if (value.text != null) return flatText(value.text);
+  return '';
+};
+
+function channelMeta(page) {
+  const content = page?.header?.content ?? {};
+  const parts = (content.metadata?.metadata_rows ?? []).flatMap(row => (row.metadata_parts ?? []).map(part => flatText(part.text)));
+  const description = flatText(content.description?.description ?? content.description) || String(page?.metadata?.description ?? '');
+  const lastImage = images => {
+    const list = Array.isArray(images) ? images : [];
+    return list.length ? (list[list.length - 1]?.url ?? null) : null;
+  };
+  return {
+    bannerUrl: lastImage(content.banner?.image) ?? lastImage(content.banner),
+    avatarUrl: lastImage(content.image?.avatar?.image) ?? lastImage(content.image?.image),
+    handle: parts.find(part => part.startsWith('@')) ?? null,
+    subscribers: parts.find(part => /subscri|подпис/i.test(part)) ?? null,
+    videosCount: parts.find(part => /video|видео/i.test(part)) ?? null,
+    description: description.slice(0, 600)
+  };
+}
+
 async function open({ entity }) {
   if (!entity || !['youtube', 'music'].includes(entity.source)) throw new ProviderError('invalid_request', 'Некорректная сущность каталога');
   const yt = await ensureClient();
@@ -282,6 +314,7 @@ async function open({ entity }) {
       ['videos', 'has_videos', 'getVideos', 'video'],
       ['shorts', 'has_shorts', 'getShorts', 'video'],
       ['live', 'has_live_streams', 'getLiveStreams', 'video'],
+      ['podcasts', 'has_podcasts', 'getPodcasts', 'playlist'],
       ['playlists', 'has_playlists', 'getPlaylists', 'playlist']
     ];
     for (const [name, available, getter, kind] of tabs) {
@@ -302,7 +335,69 @@ async function open({ entity }) {
       if (items.length) sections[label] = { items, nextCursor: null, exhausted: true };
     }
   }
-  return { entity: header, sections, items: [], nextCursor: null, exhausted: true };
+  return { entity: header, sections, meta: entity.kind === 'channel' ? channelMeta(page) : null, items: [], nextCursor: null, exhausted: true };
+}
+
+const SECTION_GETTERS = { videos: ['getVideos', 'video'], shorts: ['getShorts', 'video'], live: ['getLiveStreams', 'video'],
+  podcasts: ['getPodcasts', 'playlist'], playlists: ['getPlaylists', 'playlist'] };
+const SORT_FILTERS = new Set(['Latest', 'Popular', 'Oldest']);
+
+async function channelSection({ channelId, tab, sort }) {
+  const entry = SECTION_GETTERS[tab];
+  if (!entry || typeof channelId !== 'string' || !channelId) throw new ProviderError('invalid_request', 'Неизвестный раздел канала');
+  const yt = await ensureClient();
+  const page = await yt.getChannel(channelId);
+  let section = await page[entry[0]]();
+  if (sort && SORT_FILTERS.has(sort) && entry[1] === 'video' && Array.isArray(section.filters) && section.filters.includes(sort)) {
+    const filtered = await section.applyFilter(sort);
+    section = Array.isArray(filtered.videos) && filtered.videos.length
+      ? { contents: filtered.videos, has_continuation: hasContinuation(filtered), getContinuation: () => filtered.getContinuation() }
+      : filtered;
+  }
+  return pageResult(section, { source: 'youtube', kind: entry[1], preserveDuplicates: false });
+}
+
+const commentPages = new Map();
+
+async function comments({ videoId, cursor }) {
+  const yt = await ensureClient();
+  let page;
+  let id = cursor;
+  if (cursor) {
+    const state = commentPages.get(cursor);
+    if (!state) throw new ProviderError('cursor_expired', 'Комментарии устарели; обновите список');
+    page = await state.page.getContinuation();
+  } else {
+    if (typeof videoId !== 'string' || !/^[A-Za-z0-9_-]{6,32}$/.test(videoId)) throw new ProviderError('invalid_request', 'Некорректный идентификатор видео');
+    page = await yt.getComments(videoId);
+    id = randomUUID();
+  }
+  const items = (page.contents ?? []).map(thread => {
+    const comment = thread.comment ?? {};
+    return {
+      id: String(comment.comment_id ?? ''),
+      author: String(comment.author?.name ?? ''),
+      text: flatText(comment.content?.text ?? comment.content) || String(comment.content ?? ''),
+      likes: String(comment.like_count ?? ''),
+      published: String(comment.published_time ?? ''),
+      pinned: Boolean(comment.is_pinned),
+      replies: Number(comment.reply_count) || 0
+    };
+  }).filter(row => row.id && row.text);
+  const more = typeof page.getContinuation === 'function' && hasContinuation(page);
+  if (more) commentPages.set(id, { page, touched: Date.now() });
+  else commentPages.delete(id);
+  if (commentPages.size > 16) commentPages.delete(commentPages.keys().next().value);
+  return { items, nextCursor: more ? id : null };
+}
+
+async function related({ videoId }) {
+  if (!/^[A-Za-z0-9_-]{6,32}$/.test(String(videoId ?? ''))) throw new ProviderError('invalid_request', 'Некорректный идентификатор видео');
+  const yt = await ensureClient();
+  const info = await yt.getInfo(videoId);
+  const feed = Array.isArray(info?.watch_next_feed) ? info.watch_next_feed : [];
+  const items = normalizeRows({ contents: feed }, 'youtube', 'video').filter(item => item.videoId && item.videoId !== videoId);
+  return { items, nextCursor: null, exhausted: true };
 }
 
 async function suggestions({ source, query }) {
@@ -313,13 +408,56 @@ async function suggestions({ source, query }) {
   return { items: (result ?? []).map(text).filter(Boolean).slice(0, 10) };
 }
 
+// Cursors are single-use state (next() advances them), so a cached response gets fresh cursors that
+// point at the original pages instead of replaying ids the UI may already have consumed or released.
+function remint(entry) {
+  let text = JSON.stringify(entry.result);
+  for (const snapshot of entry.snapshots) {
+    const id = randomUUID();
+    cursors.set(id, { page: snapshot.page, context: snapshot.context, touched: Date.now(), inFlight: null, lastResult: null });
+    text = text.split(snapshot.cursor).join(id);
+  }
+  return JSON.parse(text);
+}
+
+async function cached(method, params, handler) {
+  const ttl = FRESH_MS[method];
+  const { fresh, ...rest } = params;
+  if (!ttl) return handler(rest);
+  const key = method + JSON.stringify(rest);
+  const hit = responseCache.get(key);
+  const now = Date.now();
+  if (hit && !fresh && now - hit.at < ttl) {
+    responseCache.delete(key);
+    responseCache.set(key, hit);
+    return remint(hit);
+  }
+  const log = [];
+  try {
+    const result = await collector.run(log, () => handler(rest));
+    const snapshots = log.map(cursor => ({ cursor, page: cursors.get(cursor)?.page, context: cursors.get(cursor)?.context }))
+      .filter(snapshot => snapshot.page);
+    responseCache.delete(key);
+    responseCache.set(key, { at: Date.now(), result, snapshots });
+    while (responseCache.size > MAX_CACHED) responseCache.delete(responseCache.keys().next().value);
+    return result;
+  } catch (error) {
+    const code = publicError(error).code;
+    if (hit && now - hit.at < STALE_MS && (code === 'network_error' || code === 'provider_error')) return remint(hit);
+    throw error;
+  }
+}
+
 async function dispatch(method, params) {
   pruneCursors();
   if (method === 'ping') return { ready: Boolean(await ensureClient()), version: '18.0.0' };
-  if (method === 'search') return search(params);
+  if (method === 'search') return cached('search', params, search);
   if (method === 'next') return next(params);
-  if (method === 'open') return open(params);
-  if (method === 'suggestions') return suggestions(params);
+  if (method === 'open') return cached('open', params, open);
+  if (method === 'related') return cached('related', params, related);
+  if (method === 'suggestions') return cached('suggestions', params, suggestions);
+  if (method === 'comments') return cached('comments', params, comments);
+  if (method === 'channel_section') return cached('channel_section', params, channelSection);
   if (method === 'release') return { released: cursors.delete(params.cursor) };
   throw new ProviderError('invalid_request', 'Неизвестный метод каталога');
 }

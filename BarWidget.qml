@@ -1,10 +1,15 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "i18n.js" as L
 
 BarWidget {
   id: root
   moduleName: "vornashev.omatube"
+  // Resolved UI language; i18n.js reads it, so it is attached before any Loader creates a binding.
+  readonly property string uiLang: L.resolve(logic && logic.stateData && logic.stateData.preferences
+    ? logic.stateData.preferences.language : "auto")
+  readonly property bool i18nReady: L.attach(root)
   readonly property var logic: logicLoader.item
   readonly property bool hasTrack: logic ? logic.hasTrack : false
   readonly property bool playing: logic ? logic.playing : false

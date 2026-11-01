@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "i18n.js" as L
 
 Item {
   id: root
@@ -13,7 +14,7 @@ Item {
   readonly property string pluginDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/vornashev.omatube"
 
   property var stateData: ({ state: "idle", current: null, position: 0, duration: null, videoMode: "audio", buffering: false, youtubeAuth: ({ configured: false, authenticated: false, cookieCount: 0, browser: "chromium" }), preferences: ({ videoQuality: 1080 }) })
-  property var details: ({ queue: [], views: ({}), operations: [] })
+  property var details: ({ queue: [], mainQueue: [], views: ({}), operations: [], savedIds: [] })
   property var lastResult: null
   property string lastCommand: ""
   property var lastPayload: ({})
@@ -32,6 +33,7 @@ Item {
   property int backendSessionSerial: 0
   property int knownQueueRevision: -1
   property int knownCatalogRevision: -1
+  property int knownCollectionRevision: -1
   property var retainedOperationIds: []
   property bool refreshPending: false
   property string statusRequestCommand: ""
@@ -39,6 +41,84 @@ Item {
 
   readonly property bool hasTrack: Boolean(stateData.current && stateData.current.media)
   readonly property bool playing: stateData.state === "playing"
+  readonly property string currentVideoId: hasTrack ? String(stateData.current.media.videoId || "") : ""
+  readonly property var playContext: stateData.context || null
+  // "source" (Now playing: a playlist, page or link) or "main" (My queue, saved for later).
+  readonly property string lane: String(stateData.lane || "source")
+  readonly property var myQueue: stateData.lanes && stateData.lanes.main ? stateData.lanes.main : ({ count: 0, duration: null, next: null })
+  // The playlist behind Now playing, also while My queue plays and it waits paused.
+  readonly property var sourceContext: stateData.lanes && stateData.lanes.source ? stateData.lanes.source.context || null : null
+  // Upcoming entries in play order: the rest of the active lane, then My queue while it waits.
+  readonly property var upcomingRows: {
+    var rows = details && details.queue ? details.queue : []
+    var currentId = stateData.current ? stateData.current.entryId : ""
+    var start = rows.findIndex(function(row) { return row.entryId === currentId })
+    var result = rows.slice(start + 1)
+    if (lane !== "main" && details && details.mainQueue) result = result.concat(details.mainQueue)
+    return result
+  }
+  // Video id → 1-based place among the upcoming entries, for "В ОЧЕРЕДИ · 4" badges.
+  readonly property var queuedPositions: {
+    var result = ({})
+    for (var i = 0; i < upcomingRows.length; ++i) {
+      var id = String((upcomingRows[i].media || ({})).videoId || "")
+      if (id !== "" && result[id] === undefined) result[id] = i + 1
+    }
+    return result
+  }
+  readonly property var queuedEntryIds: {
+    var result = ({})
+    for (var i = 0; i < upcomingRows.length; ++i) {
+      var id = String((upcomingRows[i].media || ({})).videoId || "")
+      if (id !== "" && result[id] === undefined) result[id] = String(upcomingRows[i].entryId || "")
+    }
+    return result
+  }
+  // Backend notices (a watched item left My queue, Now playing ran out) become toasts once each.
+  property int seenNoticeId: -1
+  onStateDataChanged: {
+    var notice = stateData.notice
+    if (!notice || Number(notice.id) === seenNoticeId) return
+    var first = seenNoticeId < 0
+    seenNoticeId = Number(notice.id)
+    if (first) return
+    if (notice.kind === "finished") {
+      var entries = notice.entries
+      notify({ text: L.tr("Досмотрено — убрано из очереди: ") + "«" + String(notice.title || L.tr("Видео")) + "»",
+        icon: "check", action: L.tr("ВЕРНУТЬ"), run: function() { root.request("queue_restore", { entries: entries, lane: "main" }) } })
+    } else if (notice.kind === "laneSwitched" && notice.reason === "sourceEnded") {
+      notify({ text: L.tr("Плейлист закончился — продолжаем мою очередь"), icon: "list-video", action: L.tr("ОТМЕНИТЬ"),
+        run: function() { root.request("lane_switch", { lane: "source", play: false }) } })
+    }
+  }
+  signal toastRequested(var toast)
+  signal playlistPickerRequested(var media)
+
+  // "loading" | "playing" | "paused" | "error" | "queued" | "" for any media shown in a list.
+  function mediaState(videoId) {
+    var id = String(videoId || "")
+    if (id === "") return ""
+    if (id === currentVideoId) {
+      var state = String(stateData.state || "")
+      if (state === "loading" || state === "playing" || state === "paused" || state === "error") return state
+      return ""
+    }
+    return queuedPositions[id] !== undefined ? "queued" : ""
+  }
+  readonly property var savedLookup: {
+    var ids = details && details.savedIds ? details.savedIds : []
+    var result = ({})
+    for (var i = 0; i < ids.length; ++i) result[ids[i]] = true
+    return result
+  }
+  function isSaved(videoId) { return savedLookup[String(videoId || "")] === true }
+  function queueEntryId(videoId) { return queuedEntryIds[String(videoId || "")] || "" }
+  function queuePosition(videoId) {
+    var position = queuedPositions[String(videoId || "")]
+    return position === undefined ? 0 : position
+  }
+  // toast: { text, icon, action, run: function, danger }
+  function notify(toast) { toastRequested(toast) }
   readonly property string videoMode: String(stateData.videoMode || "audio")
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: false
@@ -78,8 +158,10 @@ Item {
     return busy ? "refresh" : ""
   }
   readonly property string rawError: bootstrapError || statusError
-    || (failedOperation && failedOperation.error ? String(failedOperation.error.message || "") : "")
-    || (stateData.error ? String(stateData.error.message || "") : "")
+    || (failedOperation && failedOperation.error ? L.tb(failedOperation.error.message) : "")
+    || (stateData.error ? L.tb(stateData.error.message) : "")
+  readonly property string errorCode: failedOperation && failedOperation.error ? String(failedOperation.error.code || "")
+    : (stateData.error ? String(stateData.error.code || "") : "")
   readonly property string errorKey: bootstrapError !== "" ? "bootstrap:" + bootstrapError
     : (statusError !== "" ? "status:" + statusError
     : (failedOperation ? "operation:" + String(failedOperation.operationId || "")
@@ -88,27 +170,27 @@ Item {
   readonly property string loadingMessage: {
     var kind = activeOperation && activeOperation.state === "running"
       ? String(activeOperation.kind || "") : String(runningCommand || "")
-    if (bootstrapProcess.running) return "Запускаем фоновый сервис…"
+    if (bootstrapProcess.running) return L.tr("Запускаем фоновый сервис…")
     if (stateData.buffering) return videoMode === "audio"
-      ? "Буферизуем аудио после перемотки…" : "Буферизуем видео после перемотки…"
+      ? L.tr("Буферизуем аудио после перемотки…") : L.tr("Буферизуем видео после перемотки…")
     if (stateData.state === "loading") return videoMode === "audio"
-      ? "Получаем аудиопоток и подключаем mpv…" : "Получаем видео и подключаем mpv…"
-    if (kind === "suggestions") return "Подбираем варианты запроса…"
-    if (kind === "search") return "Ищем в каталоге YouTube…"
-    if (kind === "search_more" || kind === "entity_more") return "Загружаем следующую страницу…"
-    if (kind === "open_entity") return "Открываем страницу каталога…"
-    if (kind === "playlist_copy") return "Копируем плейлист в коллекцию…"
-    if (kind === "play_url" || kind === "play_view" || kind === "play_playlist") return "Подготавливаем воспроизведение…"
-    if (kind === "collection" || kind === "open_playlist") return "Загружаем медиатеку…"
-    if (kind === "video_mode") return "Переключаем режим воспроизведения…"
-    if (kind === "youtube_auth_import") return "Импортируем cookies YouTube из Chromium…"
-    if (kind === "youtube_auth_clear") return "Удаляем cookies YouTube…"
-    if (actionProcess.running) return "Выполняем действие…"
-    return "Обновляем состояние…"
+      ? L.tr("Получаем аудиопоток и подключаем mpv…") : L.tr("Получаем видео и подключаем mpv…")
+    if (kind === "suggestions") return L.tr("Подбираем варианты запроса…")
+    if (kind === "search") return L.tr("Ищем в каталоге YouTube…")
+    if (kind === "search_more" || kind === "entity_more") return L.tr("Загружаем следующую страницу…")
+    if (kind === "open_entity") return L.tr("Открываем страницу каталога…")
+    if (kind === "playlist_copy") return L.tr("Копируем плейлист в коллекцию…")
+    if (kind === "play_url" || kind === "play_view" || kind === "play_playlist") return L.tr("Подготавливаем воспроизведение…")
+    if (kind === "collection" || kind === "open_playlist") return L.tr("Загружаем медиатеку…")
+    if (kind === "video_mode") return L.tr("Переключаем режим воспроизведения…")
+    if (kind === "youtube_auth_import") return L.tr("Импортируем cookies YouTube из Chromium…")
+    if (kind === "youtube_auth_clear") return L.tr("Удаляем cookies YouTube…")
+    if (actionProcess.running) return L.tr("Выполняем действие…")
+    return L.tr("Обновляем состояние…")
   }
-  readonly property string loaderTooltip: "Сейчас: " + loadingMessage
-    + (busySeconds > 0 ? "\nОжидание: " + busySeconds + " с" : "")
-    + (activeOperation && activeOperation.processed > 0 ? "\nОбработано: " + activeOperation.processed : "")
+  readonly property string loaderTooltip: L.tr("Сейчас: ") + loadingMessage
+    + (busySeconds > 0 ? L.tr("\nОжидание: ") + busySeconds + L.tr(" с") : "")
+    + (activeOperation && activeOperation.processed > 0 ? L.tr("\nОбработано: ") + activeOperation.processed : "")
 
   function operation(operationId) {
     if (!operationId) return null
@@ -177,7 +259,8 @@ Item {
         knownRevisions: {
           backendSessionId: backendSessionId,
           queueRevision: knownQueueRevision,
-          catalogRevision: knownCatalogRevision
+          catalogRevision: knownCatalogRevision,
+          collectionRevision: knownCollectionRevision
         },
         retainedOperationIds: trackedOperationIds()
       }
@@ -188,13 +271,50 @@ Item {
     statusProcess.running = true
   }
 
+  readonly property var parallelCommands: ["comments", "lyrics", "downloads", "feed", "subscriptions", "feed_refresh",
+    "progress", "hidden_channels", "playlist_membership", "is_subscribed", "subscriptions_import", "prefetch", "home", "stats", "sessions"]
+
+  function runParallel(entry) {
+    parallelComponent.createObject(root, { entry: entry, command: [cli, "request", entry.json], running: true })
+  }
+
+  function finishParallel(entry, code, text) {
+    var failedMessage = ""
+    var result = null
+    try {
+      var envelope = JSON.parse(text || "{}")
+      if (code !== 0 || !envelope.ok) failedMessage = envelope.error ? L.tb(envelope.error.message || L.tr("Действие не выполнено")) : L.tr("Действие не выполнено")
+      else result = envelope.result
+    } catch (error) {
+      failedMessage = L.tr("Действие вернуло некорректный ответ")
+    }
+    lastCommand = entry.command
+    lastPayload = entry.payload
+    lastResult = result
+    lastRequestId = entry.requestId
+    if (failedMessage !== "") statusError = failedMessage
+    actionSerial += 1
+  }
+
+  property var prefetched: ({})
+
   function request(command, payload) {
     var source = payload || ({})
+    if (command === "prefetch") {
+      // Hovering the same video repeatedly must not spawn a CLI process each time.
+      var id = String(source.videoId || ""), now = Date.now()
+      if (id === "" || (prefetched[id] && now - prefetched[id] < 600000)) return 0
+      prefetched[id] = now
+    }
     var body = ({})
     for (var key in source) body[key] = source[key]
     body.command = command
     requestSerial += 1
     var requestId = requestSerial
+    if (parallelCommands.indexOf(command) >= 0) {
+      runParallel({ requestId: requestId, command: command, payload: source, json: JSON.stringify(body) })
+      return requestId
+    }
     dismissedErrorKey = ""
     if (command === "suggestions") {
       actionQueue = actionQueue.filter(function(action) {
@@ -222,6 +342,36 @@ Item {
   }
 
   function dismissError() { dismissedErrorKey = errorKey }
+
+  // Every action that changes something off-screen is confirmed with a toast that can undo it.
+  function confirmAction(command, payload, result) {
+    if (command === "enqueue_url" && result && result.entryId) {
+      var entryId = String(result.entryId)
+      var undo = function() { root.request("queue_remove", { entryId: entryId }) }
+      if (payload.placement === "next")
+        notify({ text: L.tr("Будет следующим"), icon: "list-start", action: L.tr("ОТМЕНИТЬ"), run: undo })
+      else
+        notify({ text: "«" + String((result.media || ({})).title || L.tr("Видео")) + L.tr("» — в мою очередь, ")
+          + Number(result.position || 0) + L.tr("-м"), icon: "list-plus", action: L.tr("ОТМЕНИТЬ"), run: undo })
+    } else if (command === "save_media" && payload.saved === true && payload.media) {
+      var media = payload.media
+      notify({ text: L.tr("Сохранено в медиатеку"), icon: "bookmark", action: L.tr("В ПЛЕЙЛИСТ"),
+        run: function() { root.playlistPickerRequested(media) } })
+    }
+  }
+  function copyLink(url, position) {
+    var link = String(url || "")
+    if (link === "") return
+    var seconds = Math.floor(Number(position || 0))
+    if (seconds > 0) link += (link.indexOf("?") >= 0 ? "&" : "?") + "t=" + seconds
+    Quickshell.execDetached(["wl-copy", link])
+    notify({ text: seconds > 0 ? L.tr("Ссылка скопирована (с таймкодом ") + formatTime(seconds) + ")" : L.tr("Ссылка скопирована"), icon: "link" })
+  }
+  function formatTime(value) {
+    var seconds = Math.max(0, Math.floor(Number(value || 0)))
+    var hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60), rest = seconds % 60
+    return (hours > 0 ? hours + ":" + (minutes < 10 ? "0" : "") : "") + minutes + ":" + (rest < 10 ? "0" : "") + rest
+  }
 
   function runNextAction() {
     if (actionProcess.running || actionQueue.length === 0) return
@@ -251,7 +401,7 @@ Item {
     command: []
     stderr: StdioCollector { id: bootstrapErr; waitForEnd: true }
     onExited: function(code) {
-      root.bootstrapError = code === 0 ? "" : String(bootstrapErr.text || "Не удалось запустить OmaTube").trim()
+      root.bootstrapError = code === 0 ? "" : String(bootstrapErr.text || L.tr("Не удалось запустить OmaTube")).trim()
       root.refresh(true)
     }
   }
@@ -265,18 +415,19 @@ Item {
       var successful = false
       root.refreshPending = false
       if (code !== 0) {
-        root.statusError = "Фоновый сервис OmaTube недоступен"
+        root.statusError = L.tr("Фоновый сервис OmaTube недоступен")
       } else {
         try {
           var envelope = JSON.parse(statusOut.text || "{}")
           if (!envelope.ok)
-            throw new Error(envelope.error ? envelope.error.message : "Ошибка backend")
+            throw new Error(envelope.error ? L.tb(envelope.error.message) : L.tr("Ошибка backend"))
           var result = envelope.result || ({})
           var nextSessionId = String(result.backendSessionId || "")
           if (nextSessionId !== "" && root.backendSessionId !== ""
               && nextSessionId !== root.backendSessionId) {
             root.knownQueueRevision = -1
             root.knownCatalogRevision = -1
+            root.knownCollectionRevision = -1
             root.activeOperationId = ""
             root.retainedOperationIds = []
             root.backendSessionSerial += 1
@@ -284,17 +435,22 @@ Item {
           if (nextSessionId !== "") root.backendSessionId = nextSessionId
           root.stateData = result
           if (root.statusRequestCommand === "details") {
-            var previous = root.details || ({ queue: [], views: ({}), operations: [] })
+            var previous = root.details || ({ queue: [], mainQueue: [], views: ({}), operations: [], savedIds: [] })
             var hasQueue = Object.prototype.hasOwnProperty.call(result, "queue")
             var hasViews = Object.prototype.hasOwnProperty.call(result, "views")
             var hasOperations = Object.prototype.hasOwnProperty.call(result, "operations")
-            if (hasQueue || hasViews || hasOperations) {
+            var hasSaved = Object.prototype.hasOwnProperty.call(result, "savedIds")
+            if (hasQueue || hasViews || hasOperations || hasSaved) {
               root.details = {
                 queue: hasQueue ? result.queue : previous.queue,
+                mainQueue: hasQueue ? result.mainQueue || [] : previous.mainQueue,
                 views: hasViews ? result.views : previous.views,
-                operations: hasOperations ? result.operations : previous.operations
+                operations: hasOperations ? result.operations : previous.operations,
+                savedIds: hasSaved ? result.savedIds : previous.savedIds
               }
             }
+            if (hasSaved)
+              root.knownCollectionRevision = Number(result.collectionRevision)
             if (hasQueue)
               root.knownQueueRevision = Number(result.queueRevision)
             if (hasViews && hasOperations)
@@ -303,11 +459,23 @@ Item {
           root.statusError = ""
           successful = true
         } catch (error) {
-          root.statusError = String(error.message || "Некорректный ответ OmaTube")
+          root.statusError = String(error.message || L.tr("Некорректный ответ OmaTube"))
         }
       }
       if (successful && repeatRefresh)
         Qt.callLater(function() { root.refresh(true) })
+    }
+  }
+
+  Component {
+    id: parallelComponent
+    Process {
+      property var entry: ({})
+      stdout: StdioCollector { id: parallelOut; waitForEnd: true }
+      onExited: function(code) {
+        root.finishParallel(entry, code, parallelOut.text)
+        destroy()
+      }
     }
   }
 
@@ -322,14 +490,15 @@ Item {
       try {
         var envelope = JSON.parse(actionOut.text || "{}")
         if (code !== 0 || !envelope.ok) {
-          root.statusError = envelope.error ? String(envelope.error.message || "Действие не выполнено") : "Действие не выполнено"
+          root.statusError = envelope.error ? L.tb(envelope.error.message || L.tr("Действие не выполнено")) : L.tr("Действие не выполнено")
         } else {
           root.lastResult = envelope.result
           if (envelope.result && envelope.result.operationId) root.activeOperationId = String(envelope.result.operationId)
           root.statusError = ""
+          root.confirmAction(root.runningCommand, root.runningPayload, envelope.result)
         }
       } catch (error) {
-        root.statusError = "Действие вернуло некорректный ответ"
+        root.statusError = L.tr("Действие вернуло некорректный ответ")
       }
       root.lastRequestId = root.runningRequestId
       root.actionSerial += 1

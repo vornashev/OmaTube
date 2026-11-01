@@ -1,13 +1,46 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import os
 from pathlib import Path
 import socket
 import sys
+from typing import Any
 
 MAX_RESPONSE = 8 * 1024 * 1024
+HOST_NAME = "com.vornashev.omatube"
+# Derived from the public `key` in browser-extension/manifest.json; stable for unpacked loads.
+EXTENSION_ID = "iiljgncchpkekeadhbhlmgogcdioghho"
+# Known browsers: (id, name, family, profile dirs, host manifest dirs, Flatpak app ids).
+# "~/" is $HOME, "$XDG/" is $XDG_CONFIG_HOME. A browser counts as installed when one of its profile dirs
+# holds its marker file ("Local State" for Chromium, profiles.ini for Gecko), so the host dirs we create
+# ourselves never make a browser look installed. Gecko browsers read hosts from ~/.mozilla even when the
+# profile lives under $XDG_CONFIG_HOME (Firefox with XDG profiles, Zen); forks with a dot dir of their own
+# get both, since builds differ in which one they read.
+KNOWN_BROWSERS = [
+    ("chromium", "Chromium", "chromium", ["$XDG/chromium"], None, ["org.chromium.Chromium", "io.github.ungoogled_software.ungoogled_chromium"]),
+    ("google-chrome", "Google Chrome", "chromium", ["$XDG/google-chrome"], None, ["com.google.Chrome"]),
+    ("google-chrome-beta", "Chrome Beta", "chromium", ["$XDG/google-chrome-beta"], None, []),
+    ("google-chrome-unstable", "Chrome Dev", "chromium", ["$XDG/google-chrome-unstable"], None, []),
+    ("brave", "Brave", "chromium", ["$XDG/BraveSoftware/Brave-Browser"], None, ["com.brave.Browser"]),
+    ("vivaldi", "Vivaldi", "chromium", ["$XDG/vivaldi"], None, ["com.vivaldi.Vivaldi"]),
+    ("microsoft-edge", "Microsoft Edge", "chromium", ["$XDG/microsoft-edge"], None, ["com.microsoft.Edge"]),
+    ("opera", "Opera", "chromium", ["$XDG/opera"], None, ["com.opera.Opera"]),
+    ("thorium", "Thorium", "chromium", ["$XDG/thorium"], None, []),
+    ("helium", "Helium", "chromium", ["$XDG/net.imput.helium"], None, []),
+    ("yandex-browser", "Yandex Browser", "chromium", ["$XDG/yandex-browser"], None, []),
+    ("firefox", "Firefox", "gecko", ["~/.mozilla/firefox", "$XDG/mozilla/firefox"], ["~/.mozilla"], ["org.mozilla.firefox"]),
+    ("zen", "Zen", "gecko", ["$XDG/zen", "~/.zen"], ["~/.mozilla"], ["app.zen_browser.zen"]),
+    ("librewolf", "LibreWolf", "gecko", ["~/.librewolf", "$XDG/librewolf/librewolf"], ["~/.librewolf"], ["io.gitlab.librewolf-community"]),
+    ("floorp", "Floorp", "gecko", ["~/.floorp", "$XDG/floorp"], ["~/.floorp", "~/.mozilla"], ["one.ablaze.floorp"]),
+    ("waterfox", "Waterfox", "gecko", ["~/.waterfox", "$XDG/waterfox"], ["~/.waterfox", "~/.mozilla"], ["net.waterfox.waterfox"]),
+]
+MARKERS = {"chromium": "Local State", "gecko": "profiles.ini"}
+HOSTS_SUBDIR = {"chromium": "NativeMessagingHosts", "gecko": "native-messaging-hosts"}
+FIREFOX_EXTENSION_ID = "omatube@vornashev"
+STATUS_ORDER = {"connected": 0, "outdated": 1, "ready": 2, "missing": 3, "sandboxed": 4}
 
 
 def socket_path() -> Path:
@@ -18,9 +51,172 @@ def socket_path() -> Path:
     return Path(runtime) / "omatube" / "backend.sock"
 
 
+def config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def data_home() -> Path:
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "omatube"
+
+
+def expand(path: str) -> Path:
+    if path.startswith("$XDG/"): return config_home() / path[5:]
+    if path.startswith("~/"): return Path.home() / path[2:]
+    return Path(path).expanduser()
+
+
+def custom_dirs_file() -> Path:
+    return config_home() / "omatube" / "browser-dirs.json"
+
+
+def custom_dirs() -> list[dict[str, str]]:
+    try: rows = json.loads(custom_dirs_file().read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError): return []
+    return [row for row in rows if isinstance(row, dict) and isinstance(row.get("path"), str)
+            and row.get("family") in MARKERS] if isinstance(rows, list) else []
+
+
+def save_custom_dirs(rows: list[dict[str, str]]) -> None:
+    target = custom_dirs_file()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def manifest_for(family: str, host: Path) -> dict[str, Any]:
+    base = {"name": HOST_NAME, "description": "OmaTube browser bridge", "path": str(host), "type": "stdio"}
+    return {**base, "allowed_extensions": [FIREFOX_EXTENSION_ID]} if family == "gecko" \
+        else {**base, "allowed_origins": [f"chrome-extension://{EXTENSION_ID}/"]}
+
+
+def host_path() -> Path:
+    return data_home() / "app" / "bin" / "omatube-native-host"
+
+
+def browsers() -> list[dict[str, Any]]:
+    """Every browser OmaTube knows about on this machine, installed or not, with its manifest targets."""
+    rows = []
+    for browser_id, name, family, profiles, hosts, flatpaks in KNOWN_BROWSERS:
+        present = any((expand(path) / MARKERS[family]).exists() for path in profiles)
+        # Chromium reads hosts from inside its own profile dir; Gecko from the dirs listed.
+        dirs = [expand(path) for path in (hosts or profiles[:1])]
+        rows.append({"id": browser_id, "name": name, "family": family, "kind": "native", "present": present,
+                     "targets": [path / HOSTS_SUBDIR[family] / f"{HOST_NAME}.json" for path in dirs]})
+        for app in flatpaks:
+            if (Path.home() / ".var/app" / app).is_dir():
+                rows.append({"id": f"{browser_id}-flatpak", "name": f"{name} · Flatpak", "family": family, "kind": "sandboxed",
+                             "present": True, "targets": []})
+    for row in custom_dirs():
+        root = Path(row["path"]).expanduser()
+        hosts = root if root.name == HOSTS_SUBDIR[row["family"]] else root / HOSTS_SUBDIR[row["family"]]
+        rows.append({"id": f"custom:{root}", "name": str(root).replace(str(Path.home()), "~", 1), "family": row["family"],
+                     "kind": "custom", "present": True, "targets": [hosts / f"{HOST_NAME}.json"]})
+    return rows
+
+
+def manifest_ok(target: Path, expected: dict[str, Any]) -> bool:
+    try: return json.loads(target.read_text(encoding="utf-8")) == expected
+    except (OSError, json.JSONDecodeError): return False
+
+
+def browser_setup(remove: bool, quiet: bool = False) -> int:
+    host = host_path()
+    if not remove and not os.access(host, os.X_OK):
+        print(f"Native host is not installed: {host}", file=sys.stderr); return 1
+    changed: list[str] = []
+    written: set[Path] = set()
+    for row in browsers():
+        if remove:
+            removed = [target for target in row["targets"] if target.exists()]
+            for target in removed: target.unlink()
+            if removed: changed.append(row["id"])
+        elif row["present"] and row["targets"]:
+            manifest = manifest_for(row["family"], host)
+            for target in row["targets"]:
+                if target in written or manifest_ok(target, manifest): continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8"); target.chmod(0o644)
+                written.add(target)
+            changed.append(row["id"])
+    if not quiet: print(json.dumps({"ok": True, "result": {"removed" if remove else "installed": changed}}, ensure_ascii=False))
+    return 0
+
+
+def add_custom_dir(path: str, family: str | None) -> int:
+    root = Path(path).expanduser().resolve()
+    if not root.is_dir(): print(f"Not a directory: {root}", file=sys.stderr); return 1
+    family = family or ("gecko" if (root / "profiles.ini").exists() or root.name == "native-messaging-hosts" else "chromium")
+    rows = [row for row in custom_dirs() if Path(row["path"]).expanduser() != root]
+    save_custom_dirs(rows + [{"path": str(root), "family": family}])
+    return browser_setup(False)
+
+
+def forget_custom_dir(path: str) -> int:
+    root = Path(path).expanduser().resolve()
+    for row in browsers():
+        if row["kind"] == "custom" and row["id"] == f"custom:{root}":
+            for target in row["targets"]:
+                if target.exists(): target.unlink()
+    save_custom_dirs([row for row in custom_dirs() if Path(row["path"]).expanduser().resolve() != root])
+    return browser_status()
+
+
+def browser_status() -> int:
+    try: link = json.loads((data_home() / "browser-link.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError): link = {}
+    if not isinstance(link, dict): link = {}
+    seen = link.get("browsers") if isinstance(link.get("browsers"), dict) else {}
+    try: version = (data_home() / ".installed-version").read_text(encoding="utf-8").strip()
+    except OSError: version = ""
+    host = host_path()
+    rows = []
+    for row in browsers():
+        visit = seen.get(row["id"]) if isinstance(seen.get(row["id"]), dict) else {}
+        installed = bool(row["targets"]) and all(manifest_ok(target, manifest_for(row["family"], host)) for target in row["targets"])
+        if not row["present"] and not visit: continue
+        if row["kind"] == "sandboxed": status = "sandboxed"
+        elif not installed: status = "missing"
+        elif visit.get("lastSeen"): status = "outdated" if version and visit.get("extensionVersion") not in (None, version) else "connected"
+        else: status = "ready"
+        rows.append({"id": row["id"], "name": row["name"], "family": row["family"], "kind": row["kind"], "installed": installed,
+                     "status": status, "hostsDir": str(row["targets"][0].parent).replace(str(Path.home()), "~", 1) if row["targets"] else None,
+                     **{key: visit.get(key) for key in ("lastSeen", "lastTransfer", "extensionVersion")}})
+    # A browser the table doesn't know, seen through a custom dir or a shared Gecko dir.
+    known = {row["id"] for row in rows}
+    for browser_id, visit in seen.items():
+        if browser_id in known or not isinstance(visit, dict): continue
+        rows.append({"id": browser_id, "name": visit.get("name") or browser_id, "family": visit.get("family"), "kind": "detected",
+                     "installed": True, "hostsDir": None,
+                     "status": "outdated" if version and visit.get("extensionVersion") not in (None, version) else "connected",
+                     **{key: visit.get(key) for key in ("lastSeen", "lastTransfer", "extensionVersion")}})
+    rows.sort(key=lambda row: (STATUS_ORDER[row["status"]], -(datetime.fromisoformat(row["lastSeen"]).timestamp() if row.get("lastSeen") else 0)))
+    result = {"browsers": rows,
+              "extensionPath": str(data_home() / "browser-extension"), "extensionId": EXTENSION_ID,
+              "firefoxExtension": str(data_home() / "omatube-firefox.xpi"), "firefoxExtensionId": FIREFOX_EXTENSION_ID,
+              "hostVersion": version, **{key: link.get(key) for key in ("extensionVersion", "browser", "lastSeen", "lastTransfer")}}
+    print(json.dumps({"ok": True, "result": result}, ensure_ascii=False))
+    return 0
+
+
+USAGE = "Usage: omatube browser-setup [--remove | --quiet | --dir <path> [--family chromium|gecko] | --forget <path>]"
+
+
+def browser_setup_command(args: list[str]) -> int:
+    if args in ([], ["--quiet"], ["--remove"]): return browser_setup(args == ["--remove"], args == ["--quiet"])
+    if len(args) == 2 and args[0] == "--forget": return forget_custom_dir(args[1])
+    if len(args) in {2, 4} and args[0] == "--dir":
+        family = None
+        if len(args) == 4:
+            if args[2] != "--family" or args[3] not in MARKERS: print(USAGE, file=sys.stderr); return 2
+            family = args[3]
+        return add_custom_dir(args[1], family)
+    print(USAGE, file=sys.stderr); return 2
+
+
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "browser-setup": return browser_setup_command(sys.argv[2:])
+    if sys.argv[1:] == ["browser-status"]: return browser_status()
     if len(sys.argv) < 2 or sys.argv[1] not in {"status", "details", "request"}:
-        print("Usage: omatube status|details|request '<JSON>'", file=sys.stderr); return 2
+        print("Usage: omatube status|details|request '<JSON>'|browser-setup [--remove|--quiet|--dir <path>|--forget <path>]|browser-status", file=sys.stderr); return 2
     if sys.argv[1] == "request":
         if len(sys.argv) != 3: print("request requires one JSON object", file=sys.stderr); return 2
         try: request = json.loads(sys.argv[2])

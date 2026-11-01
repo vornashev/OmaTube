@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>OmaTube</title>
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { padding: 32px 16px; }
+    main { max-width: 640px; margin: 0 auto; display: grid; gap: 20px; }
+    section { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+    .field { display: grid; gap: 6px; }
+    .field > span { font-weight: 500; }
+    .choices { display: flex; flex-wrap: wrap; gap: 6px; }
+    .choices label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; }
+    .choices label:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    .choices input { margin: 0; accent-color: var(--accent); }
+    .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+    .toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #saved { transition: opacity .3s; opacity: 0; }
+    #saved.shown { opacity: 1; }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="row" style="justify-content: space-between">
+      <div class="brand"><img src="icons/icon-48.png" alt=""><h1 data-i18n="optTitle"></h1></div>
+      <span class="muted" id="saved" data-i18n="optSaved" role="status"></span>
+    </header>
+
+    <section>
+      <h2 data-i18n="optConnection"></h2>
+      <div class="status" id="status">
+        <span class="dot"></span>
+        <div><div class="status-label"></div><div class="status-hint muted" hidden></div></div>
+      </div>
+      <div class="row"><button id="check" data-i18n="optCheck"></button></div>
+      <p class="muted" data-i18n="optPluginHint"></p>
+    </section>
+
+    <section>
+      <h2 data-i18n="optTransfer"></h2>
+      <div class="field">
+        <span data-i18n="optDefaultAction"></span>
+        <div class="choices" data-setting="defaultAction">
+          <label><input type="radio" name="defaultAction" value="now"><span data-i18n="menuNow"></span></label>
+          <label><input type="radio" name="defaultAction" value="next"><span data-i18n="menuNext"></span></label>
+          <label><input type="radio" name="defaultAction" value="end"><span data-i18n="menuEnd"></span></label>
+        </div>
+      </div>
+      <div class="field">
+        <span data-i18n="optAfter"></span>
+        <div class="choices" data-setting="afterTransfer">
+          <label><input type="radio" name="afterTransfer" value="close"><span data-i18n="optAfterClose"></span></label>
+          <label><input type="radio" name="afterTransfer" value="pause"><span data-i18n="optAfterPause"></span></label>
+        </div>
+      </div>
+      <div class="field">
+        <span data-i18n="optRewind"></span>
+        <div class="choices" data-setting="rewind" id="rewind"></div>
+        <small class="muted" data-i18n="optRewindHint"></small>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="optButton"></h2>
+      <div class="field">
+        <span data-i18n="optPlacement"></span>
+        <div class="choices" data-setting="placement">
+          <label><input type="radio" name="placement" value="actions"><span data-i18n="optPlacementActions"></span></label>
+          <label><input type="radio" name="placement" value="player"><span data-i18n="optPlacementPlayer"></span></label>
+          <label><input type="radio" name="placement" value="both"><span data-i18n="optPlacementBoth"></span></label>
+        </div>
+      </div>
+      <label class="toggle"><span data-i18n="optShorts"></span><input type="checkbox" data-setting="shorts"></label>
+      <label class="toggle"><span data-i18n="optMusic"></span><input type="checkbox" data-setting="music"></label>
+      <label class="toggle"><span data-i18n="optContextMenu"></span><input type="checkbox" data-setting="contextMenu"></label>
+      <label class="toggle"><span><span data-i18n="optThumbnails"></span><br><small class="muted" data-i18n="optThumbnailsHint"></small></span><input type="checkbox" data-setting="thumbnails"></label>
+    </section>
+
+    <section>
+      <h2 data-i18n="optShortcut"></h2>
+      <div class="row">
+        <span id="shortcut"></span>
+        <button id="shortcut-change" data-i18n="optShortcutChange"></button>
+      </div>
+    </section>
+  </main>
+  <script src="ui.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

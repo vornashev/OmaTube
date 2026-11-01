@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "short_name": "OmaTube",
+  "description": "__MSG_extDescription__",
+  "version": "0.2.0",
+  "default_locale": "ru",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq7SZlTxHBPeGmlLjrpZUhmBbxHFlLfXucmH+E4QRTWNq2hf6qYmhe8pLhy3a0L3JTZX2oTJ8F/GU3rTYtMYrdGScHo5ng9hFL/sdUi+Opu69/tiW2serOAs4OKLrkbTU8LGBPbtkfhfcoD8fUSwmEh9HZeTJpTL9+9bPx+ir+iO2lkmFS0YlvSyjIqx9hBggWrfx+e/3GKeLLY6g54Baje8TATNSi3a0tMLTCLCMd/i6+tzSSEqeiMEyCFx8lzUq5sE1ii9lTZR9FXeQqUlvjaCPFINz2vnCSQq672ygXCSE4QIp067Zjjx8pf8zJ4Nbtbohtsr5Pci+wPu2uFxcaQIDAQAB",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "contextMenus",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://music.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "__MSG_actionTitle__",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://music.youtube.com/*"
+      ],
+      "js": [
+        "lib/time.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "send-to-omatube": {
+      "suggested_key": {
+        "default": "Alt+Shift+O"
+      },
+      "description": "__MSG_commandSend__"
+    }
+  }
+}
