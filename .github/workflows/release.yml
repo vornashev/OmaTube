@@ -14,26 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify version
+      - name: Verify version and changelog
         env:
           TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          version="${TAG#v}"
-          manifest_version="$(jq -r .version manifest.json)"
-          package_version="$(jq -r .version package.json)"
-          test "$version" = "$manifest_version"
-          test "$version" = "$package_version"
+        run: scripts/check.sh --tag "$TAG"
 
-      - name: Build release archive
+      - name: Build release assets
         env:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           archive="omatube-${TAG}.tar.gz"
-          prefix="omatube-${TAG}/"
-          git archive --format=tar.gz --prefix="$prefix" -o "$archive" "$TAG"
-          sha256sum "$archive" > "$archive.sha256"
+          xpi="omatube-firefox-${TAG}.xpi"
+          git archive --format=tar.gz --prefix="omatube-${TAG}/" -o "$archive" "$TAG"
+          scripts/build-firefox-extension.sh browser-extension "$RUNNER_TEMP/firefox" "$xpi"
+          sha256sum "$archive" "$xpi" > SHA256SUMS
+          scripts/changelog-section.sh "${TAG#v}" > notes.md
 
       - name: Publish GitHub release
         env:
@@ -42,7 +38,8 @@ jobs:
         run: |
           gh release create "$TAG" \
             "omatube-${TAG}.tar.gz" \
-            "omatube-${TAG}.tar.gz.sha256" \
+            "omatube-firefox-${TAG}.xpi" \
+            SHA256SUMS \
             --verify-tag \
-            --generate-notes \
+            --notes-file notes.md \
             --title "OmaTube ${TAG}"
