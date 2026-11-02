@@ -1,0 +1,50 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: OmaTube version
+      description: "jq -r .version ~/.config/omarchy/plugins/vornashev.omatube/manifest.json"
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead. A link to the video helps.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Playback
+        - Search / browsing
+        - Queue / library
+        - Browser extension
+        - Bar widget / panel
+        - Installation / update
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser (for extension issues)
+      placeholder: "Chromium 141"
+  - type: textarea
+    id: status
+    attributes:
+      label: omatube status
+      description: Output of `omatube status`
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Backend log
+      description: Output of `journalctl --user -u omatube -n 50 --no-pager`. Remove anything private.
+      render: text
