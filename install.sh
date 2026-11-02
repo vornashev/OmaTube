@@ -44,11 +44,13 @@ chmod 700 "$APP_ROOT" "$CONFIG_DIR" "$RUNTIME_DIR"
 mkdir -p "$HOME/Videos/OmaTube"
 
 if [[ "$(realpath "$ROOT")" != "$(realpath "$PLUGIN_DIR")" ]]; then
-  QML=(CatalogImage.qml QueueMark.qml SkeletonList.qml RowMenu.qml MediaRow.qml QueueRow.qml MediaCard.qml PlayerHeader.qml PlayerCard.qml ChannelPage.qml Segmented.qml ToggleRow.qml PlaylistTableRow.qml SubscriptionsPage.qml HomePage.qml HistoryPage.qml StatsPage.qml SessionsDialog.qml Icon.qml Pill.qml IconButton.qml TabStrip.qml LyricsPane.qml CommentsPane.qml DownloadsPage.qml SkipToast.qml Equalizer.qml Toast.qml Timeline.qml PlayerBar.qml ThinPlayer.qml PlayerSheet.qml PlaylistPicker.qml MiniPlayer.qml PlaybackPopover.qml ShelfPanel.qml QueuePane.qml Rail.qml SettingsPage.qml OnboardingPage.qml NowPage.qml SearchPage.qml CollectionPage.qml PlaylistPage.qml Panel.qml WidgetLogic.qml BarPlayer.qml BarWidget.qml i18n.js manifest.json bootstrap.sh install.sh uninstall.sh requirements.lock package.json package-lock.json PATCHES LICENSE)
-  for file in "${QML[@]}"; do install -C -m 644 "$ROOT/$file" "$PLUGIN_DIR/$file"; done
+  for file in manifest.json bootstrap.sh install.sh uninstall.sh requirements.lock package.json package-lock.json PATCHES LICENSE; do
+    install -C -m 644 "$ROOT/$file" "$PLUGIN_DIR/$file"
+  done
   chmod 755 "$PLUGIN_DIR/bootstrap.sh" "$PLUGIN_DIR/install.sh" "$PLUGIN_DIR/uninstall.sh"
-  mkdir -p "$PLUGIN_DIR/icons"
-  for file in "$ROOT"/icons/*.svg; do install -C -m 644 "$file" "$PLUGIN_DIR/icons/$(basename "$file")"; done
+  # The UI lives in ui/; drop the pre-0.2 layout (QML, i18n.js and icons at the plugin root).
+  rm -rf "$PLUGIN_DIR"/*.qml "$PLUGIN_DIR/i18n.js" "$PLUGIN_DIR/icons" "$PLUGIN_DIR/ui"
+  cp -R "$ROOT/ui" "$PLUGIN_DIR/ui"
   for file in "$ROOT"/backend/*.py "$ROOT"/backend/*.lua; do install -m 644 "$file" "$PLUGIN_DIR/backend/$(basename "$file")"; done
   install -m 755 "$ROOT/catalog/worker.mjs" "$PLUGIN_DIR/catalog/worker.mjs"
   install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$PLUGIN_DIR/scripts/patch-youtubei.mjs"
