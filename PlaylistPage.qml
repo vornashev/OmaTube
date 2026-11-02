@@ -135,6 +135,8 @@ Item {
           root.loadError = ""
         } else {
           root.loadError = root.logic.statusError || L.tr("Не удалось открыть плейлист")
+          // The page shows this failure itself; keep it out of the global error toast.
+          root.logic.dismissError()
         }
         root.finishRequest()
       } else if (command === "playlist_more"
@@ -153,6 +155,7 @@ Item {
           root.moreError = ""
         } else {
           root.moreError = root.logic.statusError || L.tr("Не удалось загрузить следующую страницу")
+          root.logic.dismissError()
         }
         root.finishRequest()
       } else if (["playlist_rename", "playlist_add", "playlist_remove", "playlist_move"].indexOf(command) >= 0
@@ -263,7 +266,7 @@ Item {
       fontFamily: root.fontFamily
       current: "playlists"
       tabs: [{ label: L.tr("СОХРАНЕНО"), value: "saved" }, { label: L.tr("ПЛЕЙЛИСТЫ"), value: "playlists" },
-             { label: "YOUTUBE", value: "bookmarks" }, { label: L.tr("АВТОРЫ"), value: "authors" }, { label: L.tr("ИСТОРИЯ"), value: "history" }]
+             { label: L.tr("ИСТОРИЯ"), value: "history" }]
       onSelected: value => root.sectionRequested(value)
     }
 
@@ -501,6 +504,16 @@ Item {
             fontFamily: root.fontFamily
             onClicked: confirmDelete.open()
           }
+          ErrorTag {
+            visible: !root.loading && root.loadError !== "" && root.rowsData.length > 0
+            height: Style.space(31)
+            title: L.tr("Не удалось обновить плейлист")
+            message: root.loadError
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onRetryRequested: root.load(true)
+            onDismissRequested: root.loadError = ""
+          }
         }
 
         Row {
@@ -621,21 +634,15 @@ Item {
           foreground: root.foreground
         }
 
-        Column {
+        ErrorState {
           visible: !root.loading && root.loadError !== "" && root.rowsData.length === 0
           anchors.centerIn: parent
-          width: parent.width - Style.space(32)
-          spacing: Style.space(8)
-          Text { width: parent.width; text: root.loadError; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
-          Pill {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: L.tr("ПОВТОРИТЬ")
-            icon: "rotate-cw"
-            selected: true
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            onClicked: root.load(false)
-          }
+          width: Math.min(parent.width - Style.space(32), Style.space(440))
+          title: L.tr("Не удалось открыть плейлист")
+          message: root.loadError
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onRetryRequested: root.load(false)
         }
 
         Text {
@@ -682,14 +689,13 @@ Item {
             height: visible ? Style.space(44) : 0
             visible: root.playlist.nextOffset !== null && root.playlist.nextOffset !== undefined
               || root.loadingMore || root.moreError !== ""
-              || (root.loadError !== "" && root.rowsData.length > 0)
             Pill {
               anchors.centerIn: parent
-              text: root.loadingMore ? L.tr("ЗАГРУЖАЕМ…") : (root.moreError !== "" || root.loadError !== "" ? L.tr("ПОВТОРИТЬ ЗАГРУЗКУ") : L.tr("ЗАГРУЗИТЬ ЕЩЁ"))
+              text: root.loadingMore ? L.tr("ЗАГРУЖАЕМ…") : (root.moreError !== "" ? L.tr("ПОВТОРИТЬ ЗАГРУЗКУ") : L.tr("ЗАГРУЗИТЬ ЕЩЁ"))
               enabled: !root.loadingMore && !root.morePending
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: { if (root.loadError !== "") root.load(true); else root.loadMore() }
+              onClicked: root.loadMore()
             }
           }
           ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }

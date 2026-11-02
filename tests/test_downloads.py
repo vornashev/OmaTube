@@ -68,6 +68,13 @@ class DownloadTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.cancel(row["id"])
         self.assertIsNone(self.storage.download(row["id"]))
 
+    def test_brief_counts_active_and_failed_with_overall_progress(self):
+        self.assertEqual(self.manager.brief(), {"active": 0, "failed": 0, "progress": None})
+        self.storage.create_download("a", MEDIA, "audio"); self.storage.update_download("a", state="running", downloaded=300, total=1000)
+        self.storage.create_download("b", {**MEDIA, "videoId": "BBBBBBBBBBB"}, "audio"); self.storage.update_download("b", state="paused", downloaded=500, total=1000)
+        self.storage.create_download("c", {**MEDIA, "videoId": "CCCCCCCCCCC"}, "audio"); self.storage.update_download("c", state="failed")
+        self.assertEqual(self.manager.brief(), {"active": 2, "failed": 1, "progress": 0.4})
+
     def test_restart_marks_interrupted_downloads_failed(self):
         self.storage.create_download("x", MEDIA, "audio"); self.storage.update_download("x", state="running")
         self.make(lambda item: [])

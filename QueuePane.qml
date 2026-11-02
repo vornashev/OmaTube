@@ -578,7 +578,7 @@ Item {
           selected: true
           foreground: root.foreground
           fontFamily: root.fontFamily
-          onClicked: { root.request("play_url", { url: root.clipboardUrl }); root.clipboardUrl = "" }
+          onClicked: { root.request("play_url", { url: root.clipboardUrl, placement: "first" }); root.clipboardUrl = "" }
         }
       }
 

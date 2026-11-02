@@ -89,6 +89,14 @@ Item {
     } else if (notice.kind === "laneSwitched" && notice.reason === "sourceEnded") {
       notify({ text: L.tr("Плейлист закончился — продолжаем мою очередь"), icon: "list-video", action: L.tr("ОТМЕНИТЬ"),
         run: function() { root.request("lane_switch", { lane: "source", play: false }) } })
+    } else if (notice.kind === "laneSwitched" && notice.reason === "queueEnded") {
+      var finished = notice.entries || []
+      notify({ text: L.fill(L.tr("Моя очередь закончилась — продолжаем «%1»"), [String(notice.name || L.tr("Плейлист"))]), icon: "list-video",
+        action: finished.length ? L.tr("ВЕРНУТЬ") : "",
+        run: function() {
+          root.request("queue_restore", { entries: finished, lane: "main" })
+          root.request("lane_switch", { lane: "main", play: false })
+        } })
     }
   }
   signal toastRequested(var toast)
@@ -167,6 +175,22 @@ Item {
     : (failedOperation ? "operation:" + String(failedOperation.operationId || "")
     : (stateData.error ? "player:" + String(stateData.error.code || stateData.error.message || "") : "")))
   readonly property string error: errorKey !== "" && errorKey !== dismissedErrorKey ? rawError : ""
+  // What failed, for the error toast heading; `error` above says why.
+  readonly property string errorTitle: {
+    if (bootstrapError !== "") return L.tr("Не удалось запустить OmaTube")
+    if (statusError !== "") return L.tr("Действие не выполнено")
+    var kind = failedOperation ? String(failedOperation.kind || "") : ""
+    if (kind === "search" || kind === "suggestions") return L.tr("Поиск не выполнен")
+    if (kind === "search_more" || kind === "entity_more") return L.tr("Не удалось загрузить страницу")
+    if (kind === "open_entity") return L.tr("Не удалось открыть страницу")
+    if (kind === "playlist_copy") return L.tr("Не удалось скопировать плейлист")
+    if (kind === "play_url" || kind === "play_view" || kind === "play_playlist") return L.tr("Не удалось запустить воспроизведение")
+    if (kind === "collection" || kind === "open_playlist") return L.tr("Не удалось загрузить медиатеку")
+    if (kind === "video_mode" || kind === "video_quality") return L.tr("Не удалось переключить режим")
+    if (kind === "youtube_auth_import" || kind === "youtube_auth_clear") return L.tr("Не удалось обновить вход в YouTube")
+    if (failedOperation) return L.tr("Действие не выполнено")
+    return stateData.error ? L.tr("Ошибка воспроизведения") : ""
+  }
   readonly property string loadingMessage: {
     var kind = activeOperation && activeOperation.state === "running"
       ? String(activeOperation.kind || "") : String(runningCommand || "")

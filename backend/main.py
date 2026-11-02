@@ -39,7 +39,7 @@ DEFAULT_PREFERENCES = {
     "sponsorActions": dict(SPONSOR_DEFAULTS),
     "downloadKind": "audio",
     "browserAccept": True, "browserNotify": True, "browserVideoMode": "keep",
-    "playerDock": "thin", "language": "auto",
+    "playerDock": "thin", "language": "auto", "recentSearches": [],
 }
 CHOICE_PREFERENCES = {
     "panelFormat": {"wide", "compact", "shelf"},
@@ -50,6 +50,7 @@ CHOICE_PREFERENCES = {
     "language": {"auto", "en", "ru"},
     "browserVideoMode": {"keep", "audio", "tile", "floating"},
 }
+RECENT_SEARCHES = 8
 MAX_START = 24 * 3600
 MEDIA_HINT_LIMITS = {"title": 300, "author": 200, "authorId": 64}
 VIEW_OPERATION_KINDS = {
@@ -159,12 +160,16 @@ class Backend:
             "catalogRevision": self.catalog_revision,
             "collectionRevision": self.collection_revision,
             "newCount": self.storage.new_count(),
-            "downloadsActive": self.downloads.active_count(),
+            **self._downloads_brief(),
             "netSlow": any(stats.slow for stats in self.net_stats),
             "imagePort": self.image_server.port,
             "preferences": self.preferences,
             "youtubeAuth": self.youtube_auth.status(),
         }
+
+    def _downloads_brief(self) -> dict[str, Any]:
+        brief = self.downloads.brief()
+        return {"downloadsActive": brief["active"], "downloadsFailed": brief["failed"], "downloadsProgress": brief["progress"]}
 
     @staticmethod
     def _view_cursors(view: dict[str, Any]) -> set[str]:
@@ -490,11 +495,6 @@ class Backend:
             self.storage.save_media(self._media(request.get("media")), saved)
             self._collection_changed()
             return {"saved": saved}
-        if command == "save_entity":
-            saved = bool(request.get("saved"))
-            self.storage.save_entity(request.get("entity"), saved)
-            self._collection_changed()
-            return {"saved": saved}
         if command == "collection":
             return self.storage.collection(
                 str(request.get("section")),
@@ -696,7 +696,15 @@ class Backend:
         result = await self.catalog.request("search", {"source": source, "kind": kind, "query": query})
         self._decorate(result)
         view_id = str(uuid4()); self.views[view_id] = {"viewId": view_id, "type": "search", "source": source, "kind": kind, "query": query, **result}
+        self._remember_search(query)
         return self.views[view_id]
+
+    # Empty search opens on these; nothing is kept while history is off.
+    def _remember_search(self, query: str) -> None:
+        if not query or not self.preferences["historyEnabled"]: return
+        stored = self.preferences["recentSearches"] if isinstance(self.preferences["recentSearches"], list) else []
+        recent = [item for item in stored if isinstance(item, str) and item.casefold() != query.casefold()]
+        self.preferences["recentSearches"] = [query[:200], *recent][:RECENT_SEARCHES]; self._save_preferences()
 
     def _background(self, coroutine) -> None:
         task = asyncio.ensure_future(coroutine); self.maintenance_tasks.add(task)
@@ -880,6 +888,9 @@ class Backend:
             self.player.sponsor_actions = value
         elif key in CHOICE_PREFERENCES:
             if value not in CHOICE_PREFERENCES[key]: raise OmaTubeError("invalid_request", "Недопустимое значение настройки")
+        elif key == "recentSearches":
+            if not isinstance(value, list) or len(value) > RECENT_SEARCHES or any(not isinstance(item, str) or len(item) > 200 for item in value):
+                raise OmaTubeError("invalid_request", "Некорректный список запросов")
         elif key == "textWidth":
             if not isinstance(value, (int, float)) or not 80 <= value <= 600: raise OmaTubeError("invalid_request", "Ширина текста должна быть от 80 до 600")
             value = int(value)

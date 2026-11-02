@@ -31,6 +31,30 @@ class StorageTests(unittest.TestCase):
     def tearDown(self):
         self.storage.close(); self.temp.cleanup()
 
+    def test_entity_bookmarks_migrate_to_subscriptions_and_playlists(self):
+        self.storage.close()
+        path = Path(self.temp.name) / "legacy.sqlite3"
+        legacy = Storage(path)
+        legacy.db.executescript("""
+            CREATE TABLE bookmarks(source TEXT NOT NULL, kind TEXT NOT NULL, entity_id TEXT NOT NULL,
+                metadata_json TEXT NOT NULL, saved_at REAL NOT NULL, PRIMARY KEY(source,kind,entity_id));
+            INSERT INTO bookmarks VALUES('youtube','channel','UCchannel','{"id":"UCchannel","kind":"channel","title":"Channel"}',1);
+            INSERT INTO bookmarks VALUES('music','artist','UCartist','{"id":"UCartist","kind":"artist","title":"Artist"}',2);
+            INSERT INTO bookmarks VALUES('youtube','playlist','PLlist','{"id":"PLlist","kind":"playlist","source":"youtube","title":"Mix","canonicalUrl":"https://www.youtube.com/playlist?list=PLlist"}',3);
+            PRAGMA user_version=8;
+        """)
+        legacy.close()
+        self.storage = Storage(path)
+        self.assertEqual(self.storage.db.execute("PRAGMA user_version").fetchone()[0], 9)
+        self.assertEqual(sorted(self.storage.subscription_ids()), ["UCartist", "UCchannel"])
+        playlists = self.storage.collection("playlists")["items"]
+        self.assertEqual([item["title"] for item in playlists], ["Mix"])
+        self.assertEqual(playlists[0]["origin"]["entity"]["id"], "PLlist")
+        self.assertIsNone(self.storage.db.execute("SELECT name FROM sqlite_master WHERE name='bookmarks'").fetchone())
+        for section in ("bookmarks", "authors"):
+            with self.assertRaises(OmaTubeError):
+                self.storage.collection(section)
+
     def test_playlist_membership_and_remove_video_renumbers(self):
         playlist = self.storage.create_playlist("List")["id"]
         self.storage.add_playlist_item(playlist, MEDIA)

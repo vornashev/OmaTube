@@ -178,8 +178,14 @@ class DownloadManager:
                 except OSError: pass
         self.storage.delete_download(download_id); self.changed()
 
-    def active_count(self) -> int:
-        return sum(1 for row in self.storage.downloads() if row["state"] in {"queued", "running", "paused"})
+    # For the rail key: how many are going, how many failed, and the overall share done (None when sizes are unknown).
+    def brief(self) -> dict[str, Any]:
+        active = [row for row in self.storage.downloads() if row["state"] in {"queued", "running", "paused", "failed"}]
+        going = [row for row in active if row["state"] != "failed"]
+        total = sum(row["total"] or 0 for row in going)
+        done = sum(min(row["downloaded"] or 0, row["total"] or 0) for row in going)
+        return {"active": len(going), "failed": len(active) - len(going),
+                "progress": round(done / total, 3) if going and total > 0 else None}
 
     def summary(self) -> dict[str, Any]:
         rows = self.storage.downloads()

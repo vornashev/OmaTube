@@ -53,6 +53,10 @@ Panel {
   function open() { root.controller.show(); if (logic) logic.refresh(); refreshRail() }
   function close() { root.controller.hide() }
   function showPage(index) { settingsOpen = false; page = index }
+  function openSearch() {
+    showPage(1)
+    Qt.callLater(searchPage.focusQuery)
+  }
   function openSection(section) {
     settingsOpen = false
     page = 2
@@ -98,6 +102,7 @@ Panel {
       focus: true
       Keys.priority: Keys.AfterItem
       Keys.onPressed: event => {
+        console.log("OMATUBE-KEY", event.key, JSON.stringify(event.text), event.modifiers)
         if (event.key === Qt.Key_Tab
             && (event.modifiers & Qt.ControlModifier)) {
           if (root.bar && typeof root.bar.switchPanelFrom === "function")
@@ -112,9 +117,14 @@ Panel {
           else if (root.settingsOpen) root.settingsOpen = false
           else root.close()
           event.accepted = true
+        } else if (event.text === "/"
+                   && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) {
+          // Text fields take "/" themselves; anywhere else it jumps to the search query.
+          root.openSearch()
+          event.accepted = true
         } else if (event.modifiers === Qt.NoModifier
                    && event.key >= Qt.Key_0 && event.key <= Qt.Key_6) {
-          root.showPage([6, 0, 1, 2, 4, 5, 8][event.key - Qt.Key_0])
+          root.showPage([1, 0, 1, 2, 4, 5, 8][event.key - Qt.Key_0])
           event.accepted = true
         }
       }
@@ -124,6 +134,7 @@ Panel {
 
         Rail {
           id: rail
+          logic: root.logic
           visible: root.wide
           width: visible ? implicitWidth : 0
           height: parent.height
@@ -143,8 +154,11 @@ Panel {
           queueDuration: root.logic ? Number(root.logic.myQueue.duration || 0) : 0
           newCount: root.logic && root.logic.stateData.newCount ? Number(root.logic.stateData.newCount) : 0
           downloadsActive: root.logic && root.logic.stateData.downloadsActive ? Number(root.logic.stateData.downloadsActive) : 0
+          downloadsFailed: root.logic && root.logic.stateData.downloadsFailed ? Number(root.logic.stateData.downloadsFailed) : 0
+          downloadsProgress: root.logic && typeof root.logic.stateData.downloadsProgress === "number" ? root.logic.stateData.downloadsProgress : -1
           settingsActive: root.settingsOpen
           onNavigate: index => root.showPage(index)
+          onSearchRequested: root.openSearch()
           onSectionRequested: section => root.openSection(section)
           onPlaylistRequested: playlistId => { root.settingsOpen = false; root.openPlaylist(playlistId, null) }
           onMyQueueRequested: {
@@ -195,70 +209,6 @@ Panel {
               onSelected: value => root.page = value
             }
 
-        Rectangle {
-            id: errorCard
-            visible: root.logic && root.logic.error !== ""
-              && !(root.page === 1 && root.logic.failedOperation)
-            x: root.wide ? Style.space(20) : 0
-            width: parent.width - x * 2
-            height: visible ? errorContent.implicitHeight + Style.space(16) : 0
-            color: Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, .08)
-            border.width: Math.max(1, Style.space(1))
-            border.color: Qt.rgba(Color.urgent.r, Color.urgent.g, Color.urgent.b, .5)
-            Row {
-              id: errorContent
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.margins: Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-              spacing: Style.space(4)
-              Text {
-                width: parent.width - authError.width - retryError.width - dismissError.width - parent.spacing * 3
-                textFormat: Text.PlainText
-                text: root.logic ? root.logic.error : ""
-                color: Color.urgent
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                wrapMode: Text.WordWrap
-              }
-              Pill {
-                id: authError
-                visible: root.logic && (root.logic.errorCode === "auth_required" || root.logic.errorCode === "po_token_required")
-                width: visible ? implicitWidth : 0
-                height: Style.space(28)
-                anchors.verticalCenter: parent.verticalCenter
-                text: L.tr("АККАУНТ")
-                icon: "settings"
-                selected: true
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.settingsOpen = true
-              }
-              IconButton {
-                id: retryError
-                anchors.verticalCenter: parent.verticalCenter
-                icon: "rotate-cw"
-                iconSize: 14
-                danger: true
-                tooltipText: L.tr("Повторить последнее действие")
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.logic.retryLastOperation()
-              }
-              IconButton {
-                id: dismissError
-                anchors.verticalCenter: parent.verticalCenter
-                icon: "x"
-                iconSize: 14
-                tooltipText: L.tr("Скрыть ошибку")
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onClicked: root.logic.dismissError()
-              }
-            }
-          }
-
-
             StackLayout {
               x: root.wide ? 0 : Style.space(12)
               width: parent.width - x * 2
@@ -302,7 +252,6 @@ Panel {
                     fontFamily: root.fontFamily
                     onPlaylistRequested: playlistId => root.openPlaylist(playlistId, root.pickerMedia)
                     onMediaPickerRequested: media => root.openPicker(media)
-                    onDownloadsRequested: root.showPage(5)
                     onEntityRequested: entity => {
                       root.page = 1
                       searchPage.returnToCollection = true
@@ -354,18 +303,8 @@ Panel {
                   fontFamily: root.fontFamily
                 }
               }
-              Item {
-                HomePage {
-                  anchors.fill: parent
-                  logic: root.logic
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                  onNavigate: index => root.showPage(index)
-                  onChannelRequested: entity => root.openChannel(entity, 6)
-                  onOpenRequested: entity => root.openChannel(entity, 6)
-                  onPlaylistPickerRequested: media => root.openPicker(media)
-                }
-              }
+              // 6: Home used to live here; it is the empty search page now. Kept so page numbers stay put.
+              Item {}
               Item {
                 HistoryPage {
                   anchors.fill: parent
@@ -456,6 +395,23 @@ Panel {
             logic: root.logic
             foreground: root.foreground
             fontFamily: root.fontFamily
+          }
+
+          ErrorToast {
+            id: errorToast
+            z: 61
+            anchors.right: parent.right
+            anchors.rightMargin: Style.space(12)
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: toast.anchors.bottomMargin + (toast.visible ? toast.height + Style.space(8) : 0)
+            width: Math.min(implicitWidth, parent.width - Style.space(24))
+            height: implicitHeight
+            // Search shows its own failed operation inline.
+            suppressed: root.page === 1 && root.logic !== null && root.logic.failedOperation !== null
+            logic: root.logic
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            onAccountRequested: root.settingsOpen = true
           }
 
           Rectangle {

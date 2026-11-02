@@ -6,6 +6,7 @@ import "i18n.js" as L
 Rectangle {
   id: root
 
+  property var logic: null
   property color foreground: Color.foreground
   property string fontFamily: Style.font.family
   property int page: 0
@@ -22,7 +23,11 @@ Rectangle {
   property bool settingsActive: false
   property int newCount: 0
   property int downloadsActive: 0
+  property int downloadsFailed: 0
+  // Overall share downloaded, 0..1, or -1 when sizes are not known yet.
+  property real downloadsProgress: -1
   signal navigate(int page)
+  signal searchRequested()
   signal sectionRequested(string section)
   signal playlistRequested(string playlistId)
   signal myQueueRequested()
@@ -30,16 +35,91 @@ Rectangle {
   signal shrinkRequested()
 
   readonly property color dim: Qt.darker(foreground, 1.5)
-  readonly property var tiles: [
-    { label: L.tr("Сейчас"), icon: "audio-lines", page: 0 },
-    { label: L.tr("Медиатека"), icon: "library", page: 2 }
-  ]
+  // Now card: the active lane (details.queue) around the current entry.
+  readonly property var playerState: logic ? logic.stateData : ({})
+  readonly property string playerPhase: String(playerState.state || "idle")
+  readonly property bool queueLane: logic !== null && logic.lane === "main"
+  readonly property var laneRows: logic && logic.details && logic.details.queue ? logic.details.queue : []
+  readonly property int laneIndex: {
+    var currentId = playerState.current ? playerState.current.entryId : ""
+    return laneRows.findIndex(function(row) { return row.entryId === currentId })
+  }
+  readonly property var playlistContext: logic && !queueLane ? logic.sourceContext : null
+  readonly property int lanePosition: playlistContext ? Number(playlistContext.index || 0) : laneIndex + 1
+  readonly property int laneTotal: playlistContext ? Number(playlistContext.total || 0) : laneRows.length
+  readonly property real laneProgress: laneTotal > 0 ? Math.min(1, Math.max(0, lanePosition / laneTotal)) : 0
+  readonly property var nextRow: laneIndex >= 0 && laneIndex + 1 < laneRows.length ? laneRows[laneIndex + 1] : null
+  readonly property real laneRemaining: {
+    var total = 0
+    for (var i = Math.max(0, laneIndex + 1); i < laneRows.length; ++i) {
+      var duration = Number((laneRows[i].media || ({})).duration)
+      if (duration > 0) total += duration
+    }
+    return total
+  }
+  // A playlist waiting behind My queue resumes when My queue runs out.
+  readonly property var waitingPlaylist: logic && queueLane && playerState.lanes && playerState.lanes.source
+    && playerState.lanes.source.count > 0 ? logic.sourceContext : null
+  readonly property string nowState: !(logic && logic.hasTrack) ? "idle"
+    : playerPhase === "error" ? "error"
+    : playerPhase === "loading" ? "loading"
+    : playerPhase === "paused" ? "paused"
+    : nextRow ? "playing" : "last"
+  readonly property color nowColor: nowState === "error" ? Color.urgent
+    : (nowState === "idle" || nowState === "paused" ? dim : Color.accent)
 
   implicitWidth: Style.space(226)
   color: "transparent"
 
   function trackCount(count) {
     return count + " " + L.plural(count, L.tr("трек"), L.tr("трека"), L.tr("треков"))
+  }
+  function span(seconds) {
+    var minutes = Math.round(Number(seconds || 0) / 60)
+    if (minutes <= 0) return ""
+    return minutes >= 60 ? Math.floor(minutes / 60) + L.tr(" ч ") + (minutes % 60) + L.tr(" мин") : minutes + L.tr(" мин")
+  }
+  function joined(parts) { return parts.filter(function(part) { return part !== "" }).join(" · ") }
+  function nowHead() {
+    var place = laneTotal > 0 ? lanePosition + " / " + laneTotal : ""
+    var lane = queueLane ? L.tr("МОЯ ОЧЕРЕДЬ") + " " : ""
+    if (nowState === "idle") return L.tr("СЕЙЧАС")
+    if (nowState === "error") return joined([L.tr("ОШИБКА ПОТОКА"), place])
+    if (nowState === "last") return joined([L.tr("ПОСЛЕДНИЙ"), lane + place])
+    var next = nextRow && laneTotal > 0 ? lane + Math.min(laneTotal, lanePosition + 1) + " / " + laneTotal : ""
+    if (nowState === "loading") return joined([L.tr("ЗАГРУЗКА"), lane + place])
+    if (nowState === "paused") return joined([L.tr("ПАУЗА"), lane + place])
+    return joined([L.tr("ДАЛЕЕ"), next])
+  }
+  // What takes over when the active lane runs out.
+  function afterLane() {
+    if (waitingPlaylist) return L.tb(waitingPlaylist.name || L.tr("Плейлист"))
+    if (!queueLane && myQueue.count > 0) return L.tr("Моя очередь")
+    return ""
+  }
+  readonly property var myQueue: logic ? logic.myQueue : ({ count: 0, duration: null })
+  function nowTitle() {
+    if (nowState === "idle") return L.tr("Ничего не играет")
+    if (nowState === "error") return L.tb(((playerState.current || ({})).media || ({})).title || "")
+    if (nextRow) return L.tb((nextRow.media || ({})).title || "")
+    var after = afterLane()
+    return after !== "" ? L.tr("Дальше — ") + after : L.tr("Конец очереди")
+  }
+  function nowSubtitle() {
+    if (nowState === "idle") return L.tr("выберите плейлист или нажмите /")
+    if (nowState === "error") {
+      var error = playerState.error || ({})
+      return L.tb(error.message || L.tr("Не удалось открыть поток"))
+    }
+    var after = afterLane()
+    if (!nextRow) {
+      if (waitingPlaylist) return waitingPlaylist.index + " / " + waitingPlaylist.total
+      if (after !== "") return queueMeta()
+      return L.tr("после этого — тишина")
+    }
+    if (waitingPlaylist) return L.tr("затем ") + joined([after, waitingPlaylist.index + " / " + waitingPlaylist.total])
+    if (after !== "") return L.tr("затем ") + joined([after, String(myQueue.count), span(myQueue.duration)])
+    return joined([L.tr("очередь закончится"), span(laneRemaining)])
   }
   function queueMeta() {
     if (queueActive) return (queueCount > 0 ? L.tr("играет") : L.tr("пусто"))
@@ -104,113 +184,263 @@ Rectangle {
     }
   }
 
+  // Downloads in the footer: a ring fills with overall progress, a red dot marks failures.
+  component DownloadsKey: Rectangle {
+    id: key
+    property bool selected: false
+    signal clicked()
+
+    readonly property bool busy: root.downloadsActive > 0
+    readonly property real progress: busy && root.downloadsProgress >= 0 ? root.downloadsProgress : 0
+
+    width: Style.space(34)
+    height: Style.space(32)
+    radius: Style.space(6)
+    color: selected || busy ? root.soft(selected ? .18 : .1) : (keyMouse.containsMouse ? root.fade(.05) : "transparent")
+    border.width: activeFocus ? Math.max(1, Style.space(1)) : 0
+    border.color: Color.accent
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: keyTip.text
+    Keys.onReturnPressed: key.clicked()
+    Keys.onSpacePressed: key.clicked()
+
+    Canvas {
+      id: ring
+      visible: key.busy
+      anchors.centerIn: parent
+      width: Style.space(24)
+      height: width
+      property real value: key.progress
+      onValueChanged: requestPaint()
+      onVisibleChanged: requestPaint()
+      onPaint: {
+        var context = getContext("2d")
+        var line = Math.max(1.5, Style.space(2))
+        var radius = width / 2 - line / 2
+        context.reset()
+        context.lineWidth = line
+        context.strokeStyle = root.fade(.2)
+        context.beginPath(); context.arc(width / 2, height / 2, radius, 0, Math.PI * 2); context.stroke()
+        if (value <= 0) return
+        context.strokeStyle = Color.accent
+        context.beginPath()
+        context.arc(width / 2, height / 2, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * value)
+        context.stroke()
+      }
+    }
+    Icon {
+      anchors.centerIn: parent
+      name: "download"
+      size: Style.space(key.busy ? 11 : 16)
+      color: key.selected || key.busy ? Color.accent : root.dim
+    }
+    Rectangle {
+      visible: root.downloadsFailed > 0
+      x: Style.space(23)
+      y: Style.space(4)
+      width: Style.space(7)
+      height: width
+      radius: width / 2
+      color: Color.urgent
+      border.width: Math.max(1, Style.space(1.5))
+      border.color: root.color
+    }
+    MouseArea {
+      id: keyMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: key.clicked()
+    }
+    PanelToolTip {
+      id: keyTip
+      visible: keyMouse.containsMouse
+      fontFamily: root.fontFamily
+      text: {
+        var parts = []
+        if (key.busy) parts.push(L.tr("качается: ") + root.downloadsActive
+          + (root.downloadsProgress >= 0 ? " · " + Math.round(root.downloadsProgress * 100) + "%" : ""))
+        if (root.downloadsFailed > 0) parts.push(L.tr("ошибок: ") + root.downloadsFailed)
+        return L.tr("Загрузки") + (parts.length ? "\n" + parts.join(" · ") : "")
+      }
+    }
+  }
+
   Column {
     anchors.fill: parent
     anchors.margins: Style.space(10)
     spacing: Style.space(2)
 
+    // Now: what comes next rather than what plays (the player bar already shows that).
     Rectangle {
-      id: searchField
+      id: nowCard
+      readonly property bool selected: !root.settingsActive && root.page === 0
+      readonly property bool idle: root.nowState === "idle"
       width: parent.width
-      height: Style.space(36)
+      height: Style.space(68)
       radius: Style.space(6)
-      color: root.fade(.04)
-      border.width: Math.max(1, Style.space(1))
-      border.color: searchField.activeFocus || searchMouse.containsMouse ? Color.accent : root.fade(.08)
+      color: idle ? (nowMouse.containsMouse ? root.fade(.08) : root.fade(.04))
+        : (nowMouse.containsMouse ? root.fade(.12) : root.fade(.08))
+      border.width: selected || activeFocus || idle ? Math.max(1, Style.space(1)) : 0
+      border.color: selected || activeFocus ? Color.accent : root.fade(.1)
       activeFocusOnTab: true
       Accessible.role: Accessible.Button
-      Accessible.name: L.tr("Поиск")
-      Keys.onReturnPressed: root.navigate(1)
-      Keys.onSpacePressed: root.navigate(1)
+      Accessible.name: L.tr("Сейчас") + ". " + nowTitle.text + ". " + nowSubtitle.text
+      Keys.onReturnPressed: root.navigate(0)
+      Keys.onSpacePressed: root.navigate(0)
 
-      Row {
-        anchors.fill: parent
+      Column {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
         anchors.leftMargin: Style.space(10)
-        anchors.rightMargin: Style.space(10)
-        spacing: Style.space(8)
-        Icon {
-          anchors.verticalCenter: parent.verticalCenter
-          name: "search"
-          size: Style.space(15)
-          color: root.dim
-        }
+        anchors.rightMargin: Style.space(nowCard.idle ? 40 : 10)
+        spacing: Style.space(4)
         Text {
-          width: parent.width - Style.space(15) - kbd.width - parent.spacing * 2
-          anchors.verticalCenter: parent.verticalCenter
-          text: L.tr("Поиск")
-          color: root.dim
+          width: parent.width
+          text: root.nowHead()
+          color: root.nowColor
           font.family: root.fontFamily
-          font.pixelSize: Style.space(12)
+          font.pixelSize: Style.space(9)
+          font.bold: true
+          font.letterSpacing: 1.2
           elide: Text.ElideRight
         }
         Text {
-          id: kbd
-          anchors.verticalCenter: parent.verticalCenter
-          text: "/"
+          id: nowTitle
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.nowTitle()
+          color: nowCard.idle ? root.fade(.7) : root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.space(12)
+          font.bold: true
+          elide: Text.ElideRight
+        }
+        Text {
+          id: nowSubtitle
+          width: parent.width
+          textFormat: Text.PlainText
+          text: root.nowSubtitle()
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.space(10)
+          elide: Text.ElideRight
+        }
+        Rectangle {
+          width: parent.width
+          height: Math.max(2, Style.space(2))
+          radius: height / 2
+          color: root.fade(.14)
+          Rectangle {
+            visible: !nowCard.idle
+            width: parent.width * root.laneProgress
+            height: parent.height
+            radius: height / 2
+            color: root.nowColor
+          }
         }
       }
+      Icon {
+        visible: nowCard.idle
+        anchors.right: parent.right
+        anchors.rightMargin: Style.space(12)
+        anchors.verticalCenter: parent.verticalCenter
+        name: "audio-lines"
+        size: Style.space(18)
+        color: root.dim
+        opacity: .5
+      }
       MouseArea {
-        id: searchMouse
+        id: nowMouse
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.navigate(1)
+        onClicked: root.navigate(0)
       }
     }
 
-    Item { width: 1; height: Style.space(6) }
+    Item { width: 1; height: Style.space(4) }
 
     Row {
       width: parent.width
       spacing: Style.space(6)
-      Repeater {
-        model: root.tiles
-        delegate: Rectangle {
-          id: tile
-          required property var modelData
-          readonly property bool selected: !root.settingsActive
-            && (root.page === modelData.page || (modelData.page === 2 && root.page === 3))
-          width: (parent.width - parent.spacing) / 2
-          height: Style.space(60)
-          radius: Style.space(6)
-          color: selected ? root.soft(.18) : (tileMouse.containsMouse ? root.fade(.1) : root.fade(.04))
-          border.width: selected || activeFocus ? Math.max(1, Style.space(1)) : 0
-          border.color: Color.accent
-          activeFocusOnTab: true
-          Accessible.role: Accessible.Button
-          Accessible.name: modelData.label
-          Keys.onReturnPressed: root.navigate(modelData.page)
-          Keys.onSpacePressed: root.navigate(modelData.page)
 
-          Column {
-            anchors.fill: parent
-            anchors.margins: Style.space(10)
-            spacing: Style.space(6)
-            Icon {
-              name: tile.modelData.icon
-              size: Style.space(16)
-              color: Color.accent
-            }
-            Text {
-              width: parent.width
-              text: tile.modelData.label
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.space(12)
-              font.bold: true
-              elide: Text.ElideRight
-            }
+      Rectangle {
+        id: libraryButton
+        readonly property bool selected: !root.settingsActive && (root.page === 2 || root.page === 3)
+        width: parent.width - searchButton.width - parent.spacing
+        height: Style.space(36)
+        radius: Style.space(6)
+        color: selected ? root.soft(.18) : (libraryMouse.containsMouse ? root.fade(.1) : root.fade(.04))
+        border.width: selected || activeFocus ? Math.max(1, Style.space(1)) : 0
+        border.color: Color.accent
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: L.tr("Медиатека")
+        Keys.onReturnPressed: root.navigate(2)
+        Keys.onSpacePressed: root.navigate(2)
+
+        Row {
+          anchors.fill: parent
+          anchors.leftMargin: Style.space(10)
+          anchors.rightMargin: Style.space(10)
+          spacing: Style.space(10)
+          Icon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: "library"
+            size: Style.space(16)
+            color: libraryButton.selected ? Color.accent : root.dim
           }
-          MouseArea {
-            id: tileMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.navigate(tile.modelData.page)
+          Text {
+            width: parent.width - Style.space(16) - parent.spacing
+            anchors.verticalCenter: parent.verticalCenter
+            text: L.tr("Медиатека")
+            color: libraryButton.selected ? Color.accent : root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.space(12)
+            font.bold: true
+            elide: Text.ElideRight
           }
+        }
+        MouseArea {
+          id: libraryMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.navigate(2)
+        }
+      }
+
+      // Search opens its own page, so the rail keeps only a key for it (also bound to "/").
+      Rectangle {
+        id: searchButton
+        readonly property bool selected: !root.settingsActive && root.page === 1
+        width: Style.space(36)
+        height: Style.space(36)
+        radius: Style.space(6)
+        color: selected ? root.soft(.18) : (searchMouse.containsMouse ? root.fade(.1) : root.fade(.04))
+        border.width: selected || activeFocus ? Math.max(1, Style.space(1)) : 0
+        border.color: Color.accent
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: L.tr("Поиск") + " (/)"
+        Keys.onReturnPressed: root.searchRequested()
+        Keys.onSpacePressed: root.searchRequested()
+
+        Icon {
+          anchors.centerIn: parent
+          name: "search"
+          size: Style.space(15)
+          color: searchButton.selected ? Color.accent : root.dim
+        }
+        MouseArea {
+          id: searchMouse
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.searchRequested()
         }
       }
     }
@@ -437,17 +667,15 @@ Rectangle {
       anchors.bottom: parent.bottom
       spacing: Style.space(2)
       FooterButton {
-        icon: "house"
-        label: L.tr("Главная")
-        selected: !root.settingsActive && root.page === 6
-        onClicked: root.navigate(6)
-      }
-      FooterButton {
         icon: "rss"
         label: L.tr("Подписки")
         selected: !root.settingsActive && root.page === 4
         badge: root.newCount > 0
         onClicked: root.navigate(4)
+      }
+      DownloadsKey {
+        selected: !root.settingsActive && root.page === 5
+        onClicked: root.navigate(5)
       }
     }
     FooterButton {

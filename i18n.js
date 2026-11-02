@@ -82,6 +82,7 @@ var patterns = [
 ]
 
 var backend = {
+  "Некорректный список запросов": "Invalid list of queries",
   "пн": "Mon", "вт": "Tue", "ср": "Wed", "чт": "Thu", "пт": "Fri", "сб": "Sat", "вс": "Sun",
   "Смотреть позже": "Watch later",
   "В связке ключей нет пароля Chromium": "No Chromium password in the keyring",
@@ -217,7 +218,7 @@ var en = {
   "ИГРАТЬ ВСЁ": "PLAY ALL", "Копировать RSS-ссылку": "Copy RSS link", "Открыть в браузере": "Open in browser",
   "НОВЫЕ": "NEW", "ПОПУЛЯРНЫЕ": "POPULAR", "Загружаем…": "Loading…", "В этом разделе пока пусто": "Nothing here yet",
   "ЗАГРУЗИТЬ ЕЩЁ": "LOAD MORE", "ПЛЕЙЛИСТЫ КАНАЛА": "CHANNEL PLAYLISTS", "все ": "all ", "Плейлист": "Playlist",
-  "СОХРАНЕНО": "SAVED", "СПИСКИ": "LISTS", "АВТОРЫ": "AUTHORS", "ИСТОРИЯ": "HISTORY", " — копия": " — copy",
+  "СОХРАНЕНО": "SAVED", "СПИСКИ": "LISTS", "ИСТОРИЯ": "HISTORY", " — копия": " — copy",
   "Не удалось загрузить медиатеку": "Couldn't load the library",
   "Не удалось загрузить следующую страницу": "Couldn't load the next page",
   "Новый локальный плейлист": "New local playlist", "Создать плейлист": "Create playlist",
@@ -340,7 +341,9 @@ var en = {
   "Следующим · N": "Play next · N", "Убрать из «Сохранено» · S": "Remove from Saved · S",
   "Сохранить · S · ПКМ — в плейлист": "Save · S · right-click — to playlist",
   "Убрать из очереди · Delete": "Remove from queue · Delete", "Ещё": "More",
-  "Сейчас": "Now", "Поиск": "Search", "Медиатека": "Library", "Подписки": "Subscriptions", "Статистика": "Stats",
+  "Сейчас": "Now", "ОШИБКА ПОТОКА": "STREAM FAILED", "ПОСЛЕДНИЙ": "LAST", "Дальше — ": "Next: ", "Конец очереди": "End of queue",
+  "выберите плейлист или нажмите /": "pick a playlist or press /", "после этого — тишина": "silence after this", "затем ": "then ",
+  "очередь закончится": "queue ends", "Поиск": "Search", "Медиатека": "Library", "Подписки": "Subscriptions", "Статистика": "Stats",
   "Сохранено": "Saved", "Авторы": "Authors", "Компактная панель": "Compact panel",
   "ВСЕ": "ALL", "КАНАЛЫ": "CHANNELS", "ТРЕКИ": "TRACKS", "АРТИСТЫ": "ARTISTS",
   "Не удалось начать поиск": "Couldn't start the search", "Не удалось получить подсказки": "Couldn't get suggestions",
@@ -405,6 +408,7 @@ var en = {
   "кнопка «Смотреть в OmaTube» на YouTube и пункт в меню ссылок": "the “Watch in OmaTube” button on YouTube and a link context menu item",
   "Уведомление при переносе": "Notify on transfer", "«Продолжаю: название · 12:34»": "“Resuming: title · 12:34”",
   "Режим для видео из браузера": "Mode for browser videos", "«как сейчас» — оставить текущий режим плеера": "“as now” — keep the current player mode",
+  "Моя очередь закончилась — продолжаем «%1»": "My queue ended — back to “%1”",
   "БРАУЗЕРЫ": "BROWSERS", "Браузеры не найдены.": "No browsers found.",
   "Не удалось получить статус связки.": "Couldn't get the bridge status.", "ещё не подключалось": "not connected yet",
   "подключено": "connected", "перезагрузите расширение": "reload the extension", "не поддерживается": "not supported",
@@ -475,5 +479,12 @@ var en = {
   "В ПЛЕЙЛИСТ": "ADD TO PLAYLIST", "Ссылка скопирована (с таймкодом ": "Link copied (with timestamp ",
   "Ссылка скопирована": "Link copied", "Не удалось запустить OmaTube": "Couldn't start OmaTube",
   "Фоновый сервис OmaTube недоступен": "The OmaTube background service is unavailable", "Ошибка backend": "Backend error",
-  "Некорректный ответ OmaTube": "Invalid response from OmaTube"
+  "Некорректный ответ OmaTube": "Invalid response from OmaTube",
+  "Поиск не выполнен": "Search failed", "Не удалось скопировать плейлист": "Couldn't copy the playlist",
+  "Не удалось переключить режим": "Couldn't switch the mode", "Не удалось обновить вход в YouTube": "Couldn't update the YouTube sign-in",
+  "Скопировать ошибку": "Copy error", "СКОПИРОВАТЬ ОШИБКУ": "COPY ERROR", "НЕ ОБНОВЛЕНО": "NOT UPDATED",
+  ". Показан прошлый список.": ". Showing the previous list.", "КОПИРОВАТЬ": "COPY", "СКРЫТЬ": "DISMISS",
+  "Не удалось обновить медиатеку": "Couldn't refresh the library", "Не удалось обновить плейлист": "Couldn't refresh the playlist",
+  "НЕДАВНИЕ": "RECENT", "очистить": "clear", "качается: ": "downloading: ", "ошибок: ": "failed: ",
+  "Здесь появятся недосмотренные видео, новинки подписок и рекомендации по вашей истории.": "Unfinished videos, new uploads from subscriptions and recommendations based on your history will show up here."
 }

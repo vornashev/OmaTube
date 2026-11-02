@@ -99,7 +99,7 @@ class Player:
 
     @staticmethod
     def _empty_lane() -> dict[str, Any]:
-        return {"queue": [], "currentEntryId": None, "context": None, "played": [], "shuffleOrder": [], "position": 0.0}
+        return {"queue": [], "currentEntryId": None, "context": None, "played": [], "shuffleOrder": [], "position": 0.0, "ended": False}
 
     @staticmethod
     def _parse_lane(data: dict[str, Any]) -> dict[str, Any]:
@@ -112,7 +112,9 @@ class Player:
                 "context": context if isinstance(context, dict) and isinstance(context.get("id"), str) else None,
                 "played": [item for item in data.get("played", []) if item in ids],
                 "shuffleOrder": [item for item in data.get("shuffleOrder", []) if item in ids],
-                "position": max(0.0, float(data.get("position", 0)))}
+                "position": max(0.0, float(data.get("position", 0))),
+                # Played to the end (not paused for a video), so My queue running out must not bring it back.
+                "ended": data.get("ended") is True}
 
     @property
     def queue(self) -> list[dict[str, Any]]: return self.lanes[self.lane]["queue"]
@@ -353,6 +355,7 @@ class Player:
         # "Play" always fills Now playing; My queue keeps its items and the position of the one left.
         self._leave_lane()
         self.lane = "source"
+        self.lanes["source"]["ended"] = False
         self.queue = entries
         self.context = context
         self.current_id = entries[0]["entryId"]
@@ -377,6 +380,7 @@ class Player:
             entry = existing or self._entry(media)
             if existing: rows.remove(existing)
             entry.pop("startAt", None)
+            if not start and existing: start = self._resume_start(entry)
             index = next((i for i, row in enumerate(rows) if row["entryId"] == data["currentEntryId"]), 0)
             rows.insert(index, entry)
             data["currentEntryId"] = entry["entryId"]
@@ -443,6 +447,7 @@ class Player:
             if play and self.state != "playing" and self.current_id: await self.play()
             return
         async with self._transition_lock:
+            if name == "source": self.lanes["source"]["ended"] = False
             self._leave_lane(); await self._enter_lane(name, play)
 
     async def _enter_lane(self, name: str, play: bool) -> None:
@@ -653,8 +658,16 @@ class Player:
                 # Now playing ran out: carry on with My queue, the toast offers to go back.
                 self._notify("laneSwitched", reason="sourceEnded", lane="main",
                              name=(self.context or {}).get("name"))
-                self.lanes["source"]["position"] = 0.0
+                self.lanes["source"]["position"] = 0.0; self.lanes["source"]["ended"] = True
                 await self._enter_lane("main", True); return
+            source = self.lanes["source"]
+            if not target and self.lane == "main" and source["currentEntryId"] and not source["ended"]:
+                # My queue ran out while a playlist waited, paused for a video: pick it up where it stopped.
+                # This notice replaces the "finished" one, so it carries that entry for the toast's restore.
+                finished = self.notice.get("entries") if index is not None and self.notice and self.notice.get("kind") == "finished" else []
+                self._notify("laneSwitched", reason="queueEnded", lane="source",
+                             name=(source["context"] or {}).get("name"), entries=finished or [])
+                await self._enter_lane("source", True); return
             if not target:
                 self.generation += 1
                 self._loaded_generation = -1

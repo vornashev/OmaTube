@@ -47,17 +47,29 @@ Item {
         { icon: "skip-forward", command: "next", tip: L.tr("Следующий") }
       ] : []
       delegate: Item {
+        id: transportButton
         required property var modelData
+        readonly property bool hovered: controlMouse.containsMouse
+        readonly property bool pressed: controlMouse.pressed
         width: Style.space(30); height: root.implicitHeight; opacity: root.hasTrack ? 1 : .35
         Rectangle {
-          anchors.centerIn: parent; width: Style.space(26); height: Style.space(24); radius: Style.cornerRadius
-          color: controlMouse.pressed ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .18) : (controlMouse.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1) : "transparent")
-          Behavior on color { ColorAnimation { duration: 120 } }
+          anchors.centerIn: parent; width: Style.space(28); height: Style.space(24); radius: Style.cornerRadius
+          color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b,
+            transportButton.pressed ? .24 : (transportButton.hovered ? .14 : 0))
+          border.width: Math.max(1, Style.space(1))
+          border.color: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b,
+            transportButton.pressed ? .3 : (transportButton.hovered ? .18 : 0))
+          scale: transportButton.pressed ? .94 : (transportButton.hovered ? 1 : .9)
+          Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+          Behavior on border.color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+          Behavior on scale { NumberAnimation { duration: transportButton.pressed ? 80 : 160; easing.type: Easing.OutCubic } }
         }
         Icon {
-          anchors.centerIn: parent; name: modelData.icon; size: Style.space(14); color: root.foreground
-          scale: controlMouse.pressed ? .88 : (controlMouse.containsMouse ? 1.08 : 1)
-          Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+          anchors.centerIn: parent; name: modelData.icon; size: Style.space(14)
+          color: transportButton.hovered || transportButton.pressed ? Color.accent : root.foreground
+          scale: transportButton.pressed ? .9 : (transportButton.hovered ? 1.12 : 1)
+          Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+          Behavior on scale { NumberAnimation { duration: transportButton.pressed ? 80 : 160; easing.type: Easing.OutCubic } }
         }
         MouseArea {
           id: controlMouse
@@ -68,91 +80,94 @@ Item {
         }
       }
     }
-    BorderSurface {
-      visible: root.showCover; width: Style.space(20); height: width; anchors.verticalCenter: parent.verticalCenter
-      opacity: root.paused ? .6 : 1
-      scale: coverMouse.pressed ? .94 : (coverMouse.containsMouse ? 1.08 : 1)
-      Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-      radius: Style.space(2); color: Style.normalFillFor(root.foreground, Color.accent); borderSpec: Border.none()
-      CatalogImage {
-        anchors.fill: parent
-        requestedSource: String(root.media.thumbnailUrl || "")
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        fillMode: Image.PreserveAspectCrop
-      }
-      Icon {
-        anchors.centerIn: parent
-        visible: root.buffering
-        name: "loader-circle"
-        size: Style.space(12)
-        color: Color.accent
-        RotationAnimator on rotation { running: parent.visible; from: 0; to: 360; duration: 800; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
-      }
-      Rectangle {
-        anchors.fill: parent; radius: parent.radius
-        color: coverMouse.pressed ? Qt.rgba(0, 0, 0, .25) : Qt.rgba(1, 1, 1, coverMouse.containsMouse ? .16 : 0)
-        Behavior on color { ColorAnimation { duration: 120 } }
-      }
-      MouseArea { id: coverMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.logic.toggle() }
-    }
-    Rectangle {
-      visible: root.videoMode !== "audio" && !root.iconOnly
-      width: resolutionLabel.implicitWidth + Style.space(8); height: Style.space(16)
-      anchors.verticalCenter: parent.verticalCenter
-      radius: Style.space(2)
-      color: "transparent"
-      border.width: Math.max(1, Style.space(1)); border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .4)
-      Text {
-        id: resolutionLabel
-        anchors.centerIn: parent
-        text: String(root.preferences.videoQuality || 1080)
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.caption
-      }
-    }
     Item {
-      id: informationSlot
-      visible: root.showAuthor || root.showTitle
-      width: Math.max(0, Math.min(root.informationWidth,
-        root.width - root.fixedContentWidth - Style.space(15)))
-      height: root.implicitHeight
-      clip: true
+      visible: root.showCover || root.showAuthor || root.showTitle || (root.videoMode !== "audio" && !root.iconOnly)
+      width: mediaRow.width; height: root.implicitHeight
       Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width; height: Style.space(24); radius: Style.cornerRadius
-        color: informationMouse.pressed ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .18) : (informationMouse.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1) : "transparent")
+        color: mediaMouse.pressed ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .18) : (mediaMouse.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1) : "transparent")
         Behavior on color { ColorAnimation { duration: 120 } }
       }
-      Text {
-        id: informationLabel
+      Row {
+        id: mediaRow
         anchors.verticalCenter: parent.verticalCenter
-        width: root.marquee ? implicitWidth : parent.width
-        textFormat: Text.PlainText
-        text: {
-          if (root.failed) return String(root.logic.error)
-          if (root.buffering && root.hasTrack && root.logic.stateData.state === "loading") return L.tr("Загрузка потока…")
-          if (!root.hasTrack) return "OmaTube"
-          var parts = []
-          if (root.showAuthor && root.media.author) parts.push(L.tb(root.media.author))
-          if (root.showTitle) parts.push(String(root.media.title || root.media.videoId || ""))
-          return parts.join(" — ")
+        spacing: Style.space(5)
+        BorderSurface {
+          visible: root.showCover; width: Style.space(20); height: width; anchors.verticalCenter: parent.verticalCenter
+          opacity: root.paused ? .6 : 1
+          scale: mediaMouse.pressed ? .94 : (mediaMouse.containsMouse ? 1.08 : 1)
+          Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+          radius: Style.space(2); color: Style.normalFillFor(root.foreground, Color.accent); borderSpec: Border.none()
+          CatalogImage {
+            anchors.fill: parent
+            requestedSource: String(root.media.thumbnailUrl || "")
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            fillMode: Image.PreserveAspectCrop
+          }
+          Icon {
+            anchors.centerIn: parent
+            visible: root.buffering
+            name: "loader-circle"
+            size: Style.space(12)
+            color: Color.accent
+            RotationAnimator on rotation { running: parent.visible; from: 0; to: 360; duration: 800; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
+          }
         }
-        color: root.failed ? Color.urgent : root.foreground; opacity: root.paused ? .55 : 1; font.family: root.fontFamily
-        font.pixelSize: Style.font.bodySmall
-        elide: root.marquee ? Text.ElideNone : Text.ElideRight
-      }
-      SequentialAnimation {
-        running: root.marquee && informationLabel.implicitWidth > informationSlot.width
-        loops: Animation.Infinite
-        PauseAnimation { duration: 1200 }
-        NumberAnimation { target: informationLabel; property: "x"; to: informationSlot.width - informationLabel.implicitWidth; duration: Math.max(1000, informationLabel.implicitWidth * 18); easing.type: Easing.Linear }
-        PauseAnimation { duration: 900 }
-        NumberAnimation { target: informationLabel; property: "x"; to: 0; duration: 350 }
+        Rectangle {
+          visible: root.videoMode !== "audio" && !root.iconOnly
+          width: resolutionLabel.implicitWidth + Style.space(8); height: Style.space(16)
+          anchors.verticalCenter: parent.verticalCenter
+          radius: Style.space(2)
+          color: "transparent"
+          border.width: Math.max(1, Style.space(1)); border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .4)
+          Text {
+            id: resolutionLabel
+            anchors.centerIn: parent
+            text: String(root.preferences.videoQuality || 1080)
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+        }
+        Item {
+          id: informationSlot
+          visible: root.showAuthor || root.showTitle
+          width: Math.max(0, Math.min(root.informationWidth,
+            root.width - root.fixedContentWidth - Style.space(15)))
+          height: root.implicitHeight
+          clip: true
+          Text {
+            id: informationLabel
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.marquee ? implicitWidth : parent.width
+            textFormat: Text.PlainText
+            text: {
+              if (root.failed) return String(root.logic.error)
+              if (root.buffering && root.hasTrack && root.logic.stateData.state === "loading") return L.tr("Загрузка потока…")
+              if (!root.hasTrack) return "OmaTube"
+              var parts = []
+              if (root.showAuthor && root.media.author) parts.push(L.tb(root.media.author))
+              if (root.showTitle) parts.push(String(root.media.title || root.media.videoId || ""))
+              return parts.join(" — ")
+            }
+            color: root.failed ? Color.urgent : root.foreground; opacity: root.paused ? .55 : 1; font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            elide: root.marquee ? Text.ElideNone : Text.ElideRight
+          }
+          SequentialAnimation {
+            running: root.marquee && informationLabel.implicitWidth > informationSlot.width
+            loops: Animation.Infinite
+            PauseAnimation { duration: 1200 }
+            NumberAnimation { target: informationLabel; property: "x"; to: informationSlot.width - informationLabel.implicitWidth; duration: Math.max(1000, informationLabel.implicitWidth * 18); easing.type: Easing.Linear }
+            PauseAnimation { duration: 900 }
+            NumberAnimation { target: informationLabel; property: "x"; to: 0; duration: 350 }
+          }
+        }
       }
       MouseArea {
-        id: informationMouse
+        id: mediaMouse
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor

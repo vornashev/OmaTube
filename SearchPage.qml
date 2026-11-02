@@ -54,6 +54,14 @@ Item {
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property color lineColor: Qt.rgba(foreground.r, foreground.g, foreground.b, .1)
   readonly property bool isChannel: showEntity && Boolean(entityView.entity) && entityView.entity.kind === "channel"
+  // A playlist or album plays on from the chosen track (Now playing); any other single video jumps to the head of My queue.
+  function playRow(row) {
+    if (!logic || !row) return
+    if (showEntity && entityView.entity && entityView.entity.kind === "playlist")
+      logic.request("play_view", { viewId: view.viewId, entryId: row.videoId })
+    else if (row.canonicalUrl)
+      logic.request("play_url", { url: row.canonicalUrl, media: row, placement: "first" })
+  }
   readonly property bool wideLayout: width >= Style.space(560)
   readonly property bool gridMode: wideLayout && String(((logic && logic.stateData.preferences) || ({})).searchView || "grid") !== "list"
   readonly property int gridColumns: Math.max(2, Math.floor(width / Style.space(230)))
@@ -101,6 +109,12 @@ Item {
     return result.items || []
   }
   readonly property var visibleSuggestions: suggestions.slice(0, 5)
+  // Nothing searched yet: the page doubles as Home (recent queries, continue watching, new, recommended).
+  readonly property bool homeMode: !showEntity && query === ""
+  readonly property var recentSearches: {
+    var value = ((logic && logic.stateData.preferences) || ({})).recentSearches
+    return Array.isArray(value) ? value : []
+  }
   readonly property bool suggestionsOpen: !suggestionsSuppressed
     && field.activeFocus
     && (suggestionPending || visibleSuggestions.length > 0)
@@ -185,6 +199,25 @@ Item {
     selectedSuggestionIndex = -1
     suggestionsSuppressed = true
     field.focus = false
+  }
+
+  function focusQuery() {
+    field.forceActiveFocus()
+    field.selectAll()
+  }
+
+  function showHome() {
+    dismissSuggestions()
+    field.text = ""
+    query = ""
+    searchPending = false
+    morePending = false
+    latestSearchRequestId = 0
+    latestMoreRequestId = 0
+    searchOperationId = ""
+    moreOperationId = ""
+    searchAcknowledgementError = ""
+    moreAcknowledgementError = ""
   }
 
   function search() {
@@ -538,6 +571,9 @@ Item {
             root.selectedSuggestionIndex = -1
             root.suggestionsSuppressed = true
             event.accepted = true
+          } else if (event.key === Qt.Key_Escape && !root.showEntity && (field.text !== "" || root.query !== "")) {
+            root.showHome()
+            event.accepted = true
           } else if (event.key === Qt.Key_Down
                      && root.visibleSuggestions.length > 0) {
             root.moveSuggestion(1)
@@ -819,7 +855,7 @@ Item {
       }
 
       Column {
-        visible: !root.loading && root.failure === null && root.rows.length === 0
+        visible: !root.loading && root.failure === null && root.rows.length === 0 && !root.homeMode
         anchors.centerIn: parent
         width: parent.width - Style.space(32)
         spacing: Style.space(6)
@@ -849,6 +885,81 @@ Item {
         }
       }
 
+      Item {
+        visible: root.homeMode && !root.loading && root.failure === null
+        anchors.fill: parent
+
+        Item {
+          id: recentRow
+          visible: root.recentSearches.length > 0
+          width: parent.width
+          height: visible ? Style.space(28) : 0
+          clip: true
+          Row {
+            anchors.left: parent.left
+            anchors.right: clearRecent.left
+            anchors.rightMargin: Style.space(12)
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(6)
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              rightPadding: Style.space(4)
+              text: L.tr("НЕДАВНИЕ")
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.space(10)
+              font.bold: true
+              font.letterSpacing: 1.5
+            }
+            Repeater {
+              model: root.recentSearches
+              delegate: Pill {
+                required property string modelData
+                anchors.verticalCenter: parent.verticalCenter
+                height: Style.space(26)
+                text: modelData
+                labelSize: 11
+                letterSpacing: 0
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onClicked: { field.text = modelData; root.search() }
+              }
+            }
+          }
+          Text {
+            id: clearRecent
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: L.tr("очистить")
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.space(10)
+            MouseArea {
+              anchors.fill: parent
+              anchors.margins: -Style.space(4)
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.logic.request("setting", { key: "recentSearches", value: [] })
+            }
+          }
+        }
+
+        HomePage {
+          anchors.top: recentRow.bottom
+          anchors.topMargin: recentRow.visible ? Style.space(14) : 0
+          anchors.left: parent.left
+          anchors.right: parent.right
+          anchors.bottom: parent.bottom
+          embedded: true
+          logic: root.logic
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          onNavigate: index => root.pageRequested(index)
+          onChannelRequested: entity => root.openEntity(entity)
+          onOpenRequested: entity => root.openEntity(entity)
+          onPlaylistPickerRequested: media => root.playlistPickerRequested(media)
+        }
+      }
+
       ListView {
         id: results
         visible: !root.loading && root.failure === null && root.rows.length > 0
@@ -870,13 +981,11 @@ Item {
           rowNumber: index + 1
           foreground: root.foreground
           fontFamily: root.fontFamily
-          onPlayRequested: row => root.logic.request("play_view", { viewId: root.view.viewId, entryId: row.videoId })
+          onPlayRequested: row => root.playRow(row)
           onNextRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "next" })
           onEndRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
           onOpenRequested: entity => root.pushEntity(entity)
-          onSaveRequested: row => row.videoId
-            ? root.logic.request("save_media", { media: row, saved: true })
-            : root.logic.request("save_entity", { entity: row, saved: true })
+          onSaveRequested: row => root.logic.request("save_media", { media: row, saved: true })
           onPlaylistRequested: media => root.playlistPickerRequested(media)
           onChannelRequested: entity => root.pushEntity(entity)
           commandsEnabled: true
@@ -911,7 +1020,7 @@ Item {
             item: modelData
             foreground: root.foreground
             fontFamily: root.fontFamily
-            onPlayRequested: row => root.logic.request("play_view", { viewId: root.view.viewId, entryId: row.videoId })
+            onPlayRequested: row => root.playRow(row)
             onEndRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
             onOpenRequested: entity => root.pushEntity(entity)
             onPlaylistRequested: media => root.playlistPickerRequested(media)
@@ -933,7 +1042,7 @@ Item {
         foreground: root.foreground
         fontFamily: root.fontFamily
         onBackRequested: root.closeEntity()
-        onPlayVideo: row => root.logic.request("play_view", { viewId: root.view.viewId, entryId: row.videoId })
+        onPlayVideo: row => root.playRow(row)
         onEnqueueVideo: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
         onPlaylistPickerRequested: media => root.playlistPickerRequested(media)
         onOpenRequested: entity => root.pushEntity(entity)

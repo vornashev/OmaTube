@@ -506,6 +506,44 @@ class LaneTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.player.status()["notice"]["reason"], "sourceEnded")
         self.assertEqual(self.player.lanes["source"]["currentEntryId"], self.player.lanes["source"]["queue"][0]["entryId"])
 
+    async def test_my_queue_ending_resumes_the_paused_playlist(self):
+        await self.player.replace_many([media("AAAAAA1"), media("BBBBBB2")], 0, {"kind": "playlist", "id": "pl", "name": "Mix"})
+        await asyncio.sleep(0); await self.resolve("AAAAAA1")
+        await self.player.next(); await asyncio.sleep(0); await self.resolve("BBBBBB2")
+        self.player.position = 161.0
+        await self.player.play_first(media("XXXXXX1")); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "main")
+        await self.resolve("XXXXXX1")
+        await self.player.handle_mpv_event({"event": "end-file", "reason": "eof"}); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "source")
+        self.assertEqual(self.player.current["media"]["videoId"], "BBBBBB2")
+        self.assertEqual(self.player.position, 161.0)
+        notice = self.player.status()["notice"]
+        self.assertEqual((notice["reason"], notice["name"]), ("queueEnded", "Mix"))
+        self.assertEqual(notice["entries"][0]["entry"]["media"]["videoId"], "XXXXXX1")  # the toast can restore it
+        self.assertEqual(self.ids("main"), [])
+
+    async def test_manual_next_on_last_queue_item_also_returns_to_the_playlist(self):
+        await self.player.replace_many([media("AAAAAA1")], 0, {"kind": "playlist", "id": "pl", "name": "Mix"}); await asyncio.sleep(0)
+        await self.player.play_first(media("XXXXXX1")); await asyncio.sleep(0); await self.resolve("XXXXXX1")
+        self.player.position = 30.0
+        await self.player.next(); await asyncio.sleep(0)
+        self.assertEqual((self.player.lane, self.player.current["media"]["videoId"]), ("source", "AAAAAA1"))
+        self.assertEqual(self.ids("main"), ["XXXXXX1"])  # not watched, so it stays
+
+    async def test_a_playlist_played_to_the_end_does_not_come_back(self):
+        self.player.enqueue(media("QQQQQQ1"), "end")
+        await self.player.replace_many([media("AAAAAA1")], 0, {"kind": "playlist", "id": "pl", "name": "Mix"}); await asyncio.sleep(0)
+        await self.resolve("AAAAAA1")
+        await self.player.handle_mpv_event({"event": "end-file", "reason": "eof"}); await asyncio.sleep(0)
+        self.assertEqual(self.player.lane, "main")
+        self.assertTrue(Player(self.storage, self.resolver, self.mpv, lambda: None).lanes["source"]["ended"])  # survives a restart
+        await self.resolve("QQQQQQ1")
+        await self.player.handle_mpv_event({"event": "end-file", "reason": "eof"}); await asyncio.sleep(0)
+        self.assertEqual((self.player.lane, self.player.state), ("main", "idle"))
+        await self.player.replace_many([media("BBBBBB2")]); await asyncio.sleep(0)
+        self.assertFalse(self.player.lanes["source"]["ended"])
+
     async def test_remove_by_entry_id_finds_the_inactive_lane(self):
         saved = self.player.enqueue(media("QQQQQQ1"), "end")
         await self.player.replace(media("AAAAAA1")); await asyncio.sleep(0)

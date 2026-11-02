@@ -98,6 +98,18 @@ class Storage:
                         video_id TEXT, position REAL NOT NULL, updated_at REAL NOT NULL);
                     PRAGMA user_version=8;
                 """)
+        if version < 9:
+            # Entity bookmarks are gone: saved channels become subscriptions, saved playlists become local playlists.
+            with self.db:
+                for row in self.db.execute("SELECT kind,entity_id,metadata_json,saved_at FROM bookmarks ORDER BY saved_at").fetchall():
+                    entity = json.loads(row["metadata_json"])
+                    if row["kind"] in {"channel", "artist"}:
+                        self.db.execute("INSERT OR IGNORE INTO subscriptions(channel_id,title,thumbnail_url,metadata_json,subscribed_at) VALUES(?,?,?,?,?)",
+                                        (row["entity_id"], str(entity.get("title") or row["entity_id"]), entity.get("thumbnailUrl"), row["metadata_json"], row["saved_at"]))
+                    elif row["kind"] == "playlist":
+                        self.db.execute("INSERT INTO playlists(id,name,created_at,updated_at,origin_json) VALUES(?,?,?,?,?)",
+                                        (str(uuid4()), str(entity.get("title") or "Плейлист")[:200], row["saved_at"], row["saved_at"], self._json({"entity": entity, "source": entity.get("source")})))
+                self.db.executescript("DROP TABLE bookmarks; PRAGMA user_version=9;")
         self.db.execute("CREATE TEMP TABLE IF NOT EXISTS copy_staging(operation_id TEXT NOT NULL, ordinal INTEGER NOT NULL, media_json TEXT NOT NULL, PRIMARY KEY(operation_id,ordinal))")
 
     @staticmethod
@@ -171,16 +183,6 @@ class Storage:
     def saved_media_ids(self) -> list[str]:
         return [row[0] for row in self.db.execute("SELECT video_id FROM saved_media ORDER BY saved_at DESC")]
 
-    def save_entity(self, entity: dict[str, Any], saved: bool) -> None:
-        key = (entity.get("source"), entity.get("kind"), entity.get("id"))
-        if not all(isinstance(value, str) and value for value in key):
-            raise OmaTubeError("invalid_request", "Некорректная сущность каталога")
-        with self.db:
-            if saved:
-                self.db.execute("INSERT INTO bookmarks(source,kind,entity_id,metadata_json,saved_at) VALUES(?,?,?,?,?) ON CONFLICT(source,kind,entity_id) DO UPDATE SET metadata_json=excluded.metadata_json", (*key, self._json(entity), time.time()))
-            else:
-                self.db.execute("DELETE FROM bookmarks WHERE source=? AND kind=? AND entity_id=?", key)
-
     def add_history(self, media: dict[str, Any], play_id: str | None = None) -> str:
         self.upsert_media(media)
         play_id = play_id or str(uuid4())
@@ -196,10 +198,6 @@ class Storage:
         offset = max(0, int(offset)); limit = min(50, max(1, int(limit)))
         if section == "saved":
             rows = self.db.execute("SELECT m.metadata_json FROM saved_media s JOIN media m USING(video_id) ORDER BY s.saved_at DESC LIMIT ? OFFSET ?", (limit + 1, offset)).fetchall()
-            items = [json.loads(row[0]) for row in rows[:limit]]
-        elif section in {"bookmarks", "authors"}:
-            condition = "kind IN ('channel','artist')" if section == "authors" else "kind='playlist'"
-            rows = self.db.execute(f"SELECT metadata_json FROM bookmarks WHERE {condition} ORDER BY saved_at DESC LIMIT ? OFFSET ?", (limit + 1, offset)).fetchall()
             items = [json.loads(row[0]) for row in rows[:limit]]
         elif section == "history":
             rows = self.db.execute("""SELECT h.play_id,h.started_at,m.metadata_json,p.position,p.duration FROM history h JOIN media m USING(video_id)

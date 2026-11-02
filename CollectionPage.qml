@@ -32,14 +32,11 @@ Item {
   signal playlistRequested(string playlistId)
   signal mediaPickerRequested(var media)
   signal entityRequested(var entity)
-  signal downloadsRequested()
 
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property var sections: [
     { id: "saved", label: L.tr("СОХРАНЕНО") },
     { id: "playlists", label: L.tr("ПЛЕЙЛИСТЫ") },
-    { id: "bookmarks", label: "YOUTUBE" },
-    { id: "authors", label: L.tr("АВТОРЫ") },
     { id: "history", label: L.tr("ИСТОРИЯ") }
   ]
 
@@ -128,6 +125,8 @@ Item {
           root.loadError = ""
         } else {
           root.loadError = root.logic.statusError || L.tr("Не удалось загрузить медиатеку")
+          // The page shows this failure itself; keep it out of the global error toast.
+          root.logic.dismissError()
         }
         root.finishRequest()
       } else if (command === "collection"
@@ -143,13 +142,13 @@ Item {
           root.moreError = ""
         } else {
           root.moreError = root.logic.statusError || L.tr("Не удалось загрузить следующую страницу")
+          root.logic.dismissError()
         }
         root.finishRequest()
       } else if (result && (
           command === "playlist_create"
           || command === "history_clear"
           || command === "save_media"
-          || command === "save_entity"
           || command === "playlist_delete"
           || command === "playlist_rename"
           || command === "playlist_add"
@@ -183,7 +182,8 @@ Item {
 
       TabStrip {
         anchors.left: parent.left
-        anchors.right: downloadsButton.left
+        anchors.right: refreshError.visible ? refreshError.left : parent.right
+        anchors.rightMargin: refreshError.visible ? Style.space(8) : 0
         height: parent.height
         foreground: root.foreground
         fontFamily: root.fontFamily
@@ -192,18 +192,19 @@ Item {
         onSelected: value => root.section = value
       }
 
-      IconButton {
-        id: downloadsButton
+      ErrorTag {
+        id: refreshError
+        visible: !root.loading && root.loadError !== "" && root.items.length > 0
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        width: Style.space(32)
-        height: Style.space(32)
-        icon: "download"
-        iconSize: 14
-        tooltipText: L.tr("Загрузки")
+        width: implicitWidth
+        height: implicitHeight
+        title: L.tr("Не удалось обновить медиатеку")
+        message: root.loadError
         foreground: root.foreground
         fontFamily: root.fontFamily
-        onClicked: root.downloadsRequested()
+        onRetryRequested: root.load(true)
+        onDismissRequested: root.loadError = ""
       }
     }
 
@@ -296,30 +297,15 @@ Item {
         foreground: root.foreground
       }
 
-      Column {
+      ErrorState {
         visible: !root.loading && root.loadError !== "" && root.items.length === 0
         anchors.centerIn: parent
-        width: parent.width - Style.space(32)
-        spacing: Style.space(8)
-        Text {
-          width: parent.width
-          text: root.loadError
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-          horizontalAlignment: Text.AlignHCenter
-          wrapMode: Text.WordWrap
-        }
-        Pill {
-          anchors.horizontalCenter: parent.horizontalCenter
-          height: Style.space(31)
-          text: L.tr("ПОВТОРИТЬ")
-          icon: "rotate-cw"
-          selected: true
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-          onClicked: root.load(false)
-        }
+        width: Math.min(parent.width - Style.space(32), Style.space(440))
+        title: L.tr("Не удалось загрузить медиатеку")
+        message: root.loadError
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onRetryRequested: root.load(false)
       }
 
       Column {
@@ -360,35 +346,28 @@ Item {
           fontFamily: root.fontFamily
           allowSave: root.section !== "playlists"
           saveTooltip: L.tr("Убрать из медиатеки")
-          onPlayRequested: row => root.logic.request("play_url", { url: (row.media || row).canonicalUrl })
+          onPlayRequested: row => root.logic.request("play_url", { url: (row.media || row).canonicalUrl, media: row.media || row, placement: "first" })
           onNextRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "next" })
           onEndRequested: media => root.logic.request("enqueue_url", { url: media.canonicalUrl, placement: "end" })
           onOpenRequested: row => {
             if (root.section === "playlists") root.playlistRequested(row.id)
             else root.entityRequested(row)
           }
-          onSaveRequested: row => row.videoId
-            ? root.logic.request("save_media", { media: row, saved: false })
-            : root.logic.request("save_entity", { entity: row, saved: false })
+          onSaveRequested: row => root.logic.request("save_media", { media: row, saved: false })
           onPlaylistRequested: media => root.mediaPickerRequested(media)
           onCopyRequested: entity => root.beginCopy(entity)
         }
         footer: Button {
           focusable: true
           Accessible.name: text
-          visible: root.nextOffset !== null || root.loadingMore
-            || root.moreError !== "" || (root.loadError !== "" && root.items.length > 0)
+          visible: root.nextOffset !== null || root.loadingMore || root.moreError !== ""
           width: collectionList.width
           height: visible ? Style.space(38) : 0
           text: root.loadingMore ? L.tr("Загружаем…")
-            : (root.moreError !== "" || root.loadError !== ""
-              ? L.tr("Повторить загрузку") : L.tr("Загрузить ещё"))
+            : (root.moreError !== "" ? L.tr("Повторить загрузку") : L.tr("Загрузить ещё"))
           foreground: Color.accent
           enabled: !root.loadingMore && !root.morePending
-          onClicked: {
-            if (root.loadError !== "") root.load(true)
-            else root.loadMore()
-          }
+          onClicked: root.loadMore()
         }
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
       }

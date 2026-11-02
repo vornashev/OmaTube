@@ -284,7 +284,7 @@ Item {
               MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl })
+                onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl, media: modelData, placement: "first" })
               }
               Row {
                 anchors.fill: parent
@@ -352,7 +352,7 @@ Item {
                   spacing: Style.space(2)
                   IconButton { icon: "clock-plus"; iconSize: 14; tooltipText: L.tr("Смотреть позже"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("watch_later", { media: modelData }) }
                   IconButton { visible: !feedMark.visible; width: visible ? implicitWidth : 0; icon: "list-plus"; iconSize: 14; tooltipText: L.tr("В мою очередь"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("enqueue_url", { url: modelData.canonicalUrl, placement: "end" }) }
-                  IconButton { icon: "play"; iconSize: 14; tooltipText: L.tr("Играть"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl }) }
+                  IconButton { icon: "play"; iconSize: 14; tooltipText: L.tr("Играть"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl, media: modelData, placement: "first" }) }
                 }
               }
             }

@@ -172,6 +172,17 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
                 await self.backend.command({"command": "setting", "key": key, "value": value})
             self.assertEqual(raised.exception.code, "invalid_request")
 
+    async def test_search_remembers_recent_queries_unless_history_is_off(self):
+        for query in ("metallica live", "hyprland", "Metallica Live"):
+            await self.backend._search({"source": "youtube", "query": query})
+        self.assertEqual(self.backend.status()["preferences"]["recentSearches"], ["Metallica Live", "hyprland"])
+        await self.backend.command({"command": "setting", "key": "recentSearches", "value": []})
+        await self.backend.command({"command": "setting", "key": "historyEnabled", "value": False})
+        await self.backend._search({"source": "youtube", "query": "private"})
+        self.assertEqual(self.backend.status()["preferences"]["recentSearches"], [])
+        with self.assertRaises(OmaTubeError):
+            await self.backend.command({"command": "setting", "key": "recentSearches", "value": [1]})
+
     async def test_play_url_from_browser_uses_start_hints_and_preferences(self):
         replace = AsyncMock(return_value={"entryId": "e"})
         with patch.object(self.backend.player, "replace", replace):
@@ -195,6 +206,17 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(OmaTubeError) as raised:
             await self.backend.command({"command": "play_url", "url": "https://youtu.be/BaW_jenozKc", "origin": "browser"})
         self.assertEqual(raised.exception.code, "disabled")
+
+    async def test_play_url_first_from_the_plugin_heads_my_queue(self):
+        await self.backend.command({"command": "enqueue_url", "url": "https://youtu.be/AAAAAAAAAA1", "placement": "end"})
+        await self.backend.command({"command": "play_url", "url": "https://youtu.be/BaW_jenozKc", "placement": "first",
+                                    "start": 30, "media": {"title": "From search"}})
+        self.assertEqual(self.backend.player.lane, "main")
+        self.assertEqual([row["media"]["videoId"] for row in self.backend.player.queue], ["BaW_jenozKc", "AAAAAAAAAA1"])
+        self.assertEqual(self.backend.player.queue[0]["media"]["title"], "From search")
+        # Without a placement play_url still starts a new Now playing (CLI, playlist links).
+        await self.backend.command({"command": "play_url", "url": "https://youtu.be/CCCCCCCCCC3"})
+        self.assertEqual(self.backend.player.lane, "source")
 
     async def test_enqueue_url_keeps_start_for_later(self):
         entry = await self.backend.command({"command": "enqueue_url", "url": "https://youtu.be/BaW_jenozKc", "start": 40, "placement": "end"})

@@ -14,6 +14,8 @@ Item {
   property bool loading: false
   property int requestId: 0
   property int seenRevision: -1
+  // Inside the empty search page: no title, the search page already sets the margins.
+  property bool embedded: false
   signal navigate(int page)
   signal channelRequested(var entity)
   signal playlistPickerRequested(var media)
@@ -37,7 +39,7 @@ Item {
   function play(row, resume) {
     if (!logic || !row.canonicalUrl) return
     var p = row.watchProgress
-    logic.request("play_url", { url: row.canonicalUrl, start: resume && p ? Math.floor(p.position) : 0, media: row })
+    logic.request("play_url", { url: row.canonicalUrl, start: resume && p ? Math.floor(p.position) : 0, media: row, placement: "first" })
   }
 
   onLogicChanged: if (logic) load()
@@ -62,9 +64,9 @@ Item {
   Flickable {
     id: flick
     anchors.fill: parent
-    anchors.leftMargin: Style.space(root.compact ? 0 : 24)
-    anchors.rightMargin: Style.space(root.compact ? 0 : 24)
-    anchors.topMargin: Style.space(root.compact ? 10 : 20)
+    anchors.leftMargin: Style.space(root.compact || root.embedded ? 0 : 24)
+    anchors.rightMargin: Style.space(root.compact || root.embedded ? 0 : 24)
+    anchors.topMargin: Style.space(root.embedded ? 0 : (root.compact ? 10 : 20))
     contentWidth: width
     contentHeight: page.implicitHeight + Style.space(20)
     clip: true
@@ -77,7 +79,9 @@ Item {
       spacing: Style.space(root.compact ? 14 : 18)
 
       Row {
+        visible: !root.embedded
         width: parent.width
+        height: visible ? implicitHeight : 0
         spacing: Style.space(10)
         Column {
           width: parent.width - refreshButton.width - parent.spacing
@@ -188,7 +192,8 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         topPadding: Style.space(60)
-        text: L.tr("Здесь появятся недосмотренные видео, новинки подписок и рекомендации по вашей истории. Найдите что-нибудь через поиск.")
+        text: root.embedded ? L.tr("Здесь появятся недосмотренные видео, новинки подписок и рекомендации по вашей истории.")
+          : L.tr("Здесь появятся недосмотренные видео, новинки подписок и рекомендации по вашей истории. Найдите что-нибудь через поиск.")
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.space(11)

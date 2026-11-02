@@ -73,7 +73,7 @@ Item {
 
   function play(item) {
     if (!logic || !item.canonicalUrl) return
-    logic.request("play_url", { url: item.canonicalUrl, start: resumes(item) ? Math.floor(item.watchProgress.position) : 0, media: item })
+    logic.request("play_url", { url: item.canonicalUrl, start: resumes(item) ? Math.floor(item.watchProgress.position) : 0, media: item, placement: "first" })
   }
 
   function requestClear() {
