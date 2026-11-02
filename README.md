@@ -10,14 +10,24 @@ YouTube and YouTube Music in your [Omarchy](https://omarchy.org/) bar. OmaTube i
 
 **English** · [Русский](README.ru.md)
 
-<!--
-  Screenshots: put the files in docs/screenshots/ and uncomment.
-  <p align="center"><img src="docs/screenshots/wide.png" alt="OmaTube wide panel" width="860"></p>
-  <p align="center">
-    <img src="docs/screenshots/compact.png" alt="Compact panel" width="280">
-    <img src="docs/screenshots/extension.png" alt="Watch in OmaTube button on YouTube" width="560">
-  </p>
--->
+<p align="center"><img src="docs/screenshots/marketplace-preview.png" alt="OmaTube: the bar widget and the wide panel playing a Blender open movie" width="900"></p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/search.png" alt="Search results as a card grid"></td>
+    <td><img src="docs/screenshots/home.png" alt="Home: recent searches, continue watching, new from subscriptions"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/playlist.png" alt="Local playlist page"></td>
+    <td><img src="docs/screenshots/channel.png" alt="Channel page"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/subscriptions.png" alt="Subscriptions feed without sign-in"></td>
+    <td align="center"><img src="docs/screenshots/compact.png" alt="Compact panel" height="300"></td>
+  </tr>
+</table>
+
+<sub>Shown: Blender Studio open movies (CC BY), NASA and NoCopyrightSounds.</sub>
 
 ## Features
 

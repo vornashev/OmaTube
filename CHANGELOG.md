@@ -71,6 +71,7 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 - The rail footer replaces Home with a Downloads button next to Subscriptions.
 - Visual pass against the design: Lucide icons, outlined controls, underlined tabs and consistent sizes.
 - Release notes on GitHub now come from this changelog, and each release ships the Firefox `.xpi` and a `SHA256SUMS` file.
+- README shows screenshots of the panel formats and pages, plus a marketplace preview image (`docs/screenshots/`).
 
 ### Fixed
 

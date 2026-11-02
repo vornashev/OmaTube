@@ -10,10 +10,24 @@ YouTube и YouTube Music прямо в панели [Omarchy](https://omarchy.or
 
 [English](README.md) · **Русский**
 
-<!--
-  Скриншоты: положите файлы в docs/screenshots/ и раскомментируйте.
-  <p align="center"><img src="docs/screenshots/wide.png" alt="Широкая панель OmaTube" width="860"></p>
--->
+<p align="center"><img src="docs/screenshots/marketplace-preview.png" alt="OmaTube: виджет в баре и широкая панель" width="900"></p>
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/search.png" alt="Результаты поиска сеткой карточек"></td>
+    <td><img src="docs/screenshots/home.png" alt="Главная: недавние запросы, продолжить просмотр, новое в подписках"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/playlist.png" alt="Страница локального плейлиста"></td>
+    <td><img src="docs/screenshots/channel.png" alt="Страница канала"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/subscriptions.png" alt="Лента подписок без входа в аккаунт"></td>
+    <td align="center"><img src="docs/screenshots/compact.png" alt="Компактная панель" height="300"></td>
+  </tr>
+</table>
+
+<sub>На скриншотах: открытые фильмы Blender Studio (CC BY), NASA и NoCopyrightSounds.</sub>
 
 ## Возможности
 
