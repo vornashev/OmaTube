@@ -33,7 +33,7 @@ jobs:
         run: python -m unittest discover -s tests
 
       - name: Browser extension tests
-        run: node --test browser-extension/lib/
+        run: node --test 'browser-extension/lib/*.test.mjs'
 
       - name: Catalog dependencies and youtubei.js patch
         run: |

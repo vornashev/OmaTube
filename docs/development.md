@@ -48,7 +48,7 @@ journalctl --user -fu omatube
 
 ```bash
 .venv/bin/python -m unittest discover -s tests
-node --test browser-extension/lib/
+node --test 'browser-extension/lib/*.test.mjs'
 scripts/check.sh   # versions, manifest, icons, CHANGELOG format, shellcheck when installed
 ```
 

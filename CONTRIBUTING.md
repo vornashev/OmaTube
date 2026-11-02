@@ -18,7 +18,7 @@ Report security problems privately; see [SECURITY.md](SECURITY.md).
 
 1. Set up the project as described in [docs/development.md](docs/development.md).
 2. Keep a pull request focused on one change.
-3. Add or update tests for backend changes. Run `python -m unittest discover -s tests`, `node --test browser-extension/lib/` and `scripts/check.sh`.
+3. Add or update tests for backend changes. Run `python -m unittest discover -s tests`, `node --test 'browser-extension/lib/*.test.mjs'` and `scripts/check.sh`.
 4. Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for anything users will notice.
 5. Add an English translation to `ui/i18n.js` for every new UI string.
 6. For UI changes, attach a screenshot.

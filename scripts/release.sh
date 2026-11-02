@@ -52,7 +52,7 @@ if ((!skip_tests)); then
   done
   [[ -n $python ]] || die "no Python with the backend dependencies; create .venv (see docs/development.md) or set PYTHON"
   "$python" -m unittest discover -s tests
-  node --test browser-extension/lib/
+  node --test 'browser-extension/lib/*.test.mjs'
 fi
 
 say "committing and tagging $tag"
