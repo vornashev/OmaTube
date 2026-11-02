@@ -6,6 +6,8 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+
 ### Highlights
 
 - **My queue.** Single videos now go to a separate, persistent queue. Playlists, albums and radio play in **Now playing**. A playlist you interrupt with a video resumes from the same track and second.
@@ -115,6 +117,7 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 - Player header and panel expose video mode, quality, authentication status, and configurable bar content.
 - Stream resolution supports authenticated cookies, separate audio/video tracks, and bounded quality selection.
 
-[Unreleased]: https://github.com/vornashev/OmaTube/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/vornashev/OmaTube/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/vornashev/OmaTube/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/vornashev/OmaTube/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vornashev/OmaTube/releases/tag/v0.1.0
