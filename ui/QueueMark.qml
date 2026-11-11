@@ -44,6 +44,7 @@ Rectangle {
     }
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: root.removing ? L.tr("УБРАТЬ") : (root.position === 1 ? L.tr("ДАЛЕЕ") : String(root.position))
       color: markRow.tone
       font.family: root.fontFamily

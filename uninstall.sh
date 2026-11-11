@@ -1,5 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
+# System directories only: a binary planted earlier in the user's PATH must not run as part of setup.
+export PATH=/usr/local/bin:/usr/bin
 
 PLUGIN_ID="vornashev.omatube"
 APP_ROOT="$HOME/.local/share/omatube"

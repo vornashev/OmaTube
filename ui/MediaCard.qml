@@ -93,8 +93,8 @@ Item {
   function triggerMenuAction(action) {
     if (action === "open") openRequested(item)
     else if (action === "copy") copyRequested(item)
-    else if (action === "copylink") Quickshell.execDetached(["wl-copy", String(item.canonicalUrl)])
-    else if (action === "browser") Quickshell.execDetached(["xdg-open", String(item.canonicalUrl)])
+    else if (action === "copylink") Quickshell.execDetached(["/usr/bin/wl-copy", String(item.canonicalUrl)])
+    else if (action === "browser") Quickshell.execDetached(["/usr/bin/xdg-open", String(item.canonicalUrl)])
   }
   readonly property string metaLine: {
     var parts = []
@@ -187,6 +187,7 @@ Item {
         Text {
           id: durationLabel
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: (root.watched ? "✓ " : "") + root.formatDuration(root.media.duration)
           color: "#FFFFFF"
           font.family: root.fontFamily
@@ -204,13 +205,15 @@ Item {
           anchors.centerIn: parent
           spacing: Style.space(8)
           Icon {
+            id: loadingSpinner
             anchors.horizontalCenter: parent.horizontalCenter
             name: "loader-circle"
             size: Style.space(26)
             color: "#FFFFFF"
-            RotationAnimator on rotation { running: root.cardState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
+            RotationAnimator on rotation { running: loadingSpinner.animationVisible && root.cardState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onRunningChanged: if (!running && loadingSpinner) loadingSpinner.rotation = 0 }
           }
           Text {
+            textFormat: Text.PlainText
             text: L.tr("ЗАГРУЗКА")
             color: "#FFFFFF"
             font.family: root.fontFamily
@@ -252,6 +255,7 @@ Item {
           }
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: root.cardState === "playing" ? L.tr("ИГРАЕТ") : (root.cardState === "paused" ? L.tr("ПАУЗА")
               : L.tr("В ОЧЕРЕДИ · ") + (root.logic ? root.logic.queuePosition(root.media.videoId) : ""))
             color: badgeRow.tone
@@ -287,6 +291,7 @@ Item {
         Text {
           id: newLabel
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: L.tr("НОВОЕ")
           color: Color.background
           font.family: root.fontFamily
@@ -362,6 +367,7 @@ Item {
             }
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: queueMark.removing ? L.tr("УБРАТЬ") : (queueMark.position === 1 ? L.tr("ДАЛЕЕ") : String(queueMark.position))
               color: markRow.tone
               font.family: root.fontFamily

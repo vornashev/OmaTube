@@ -104,6 +104,7 @@ Item {
         spacing: Style.space(10)
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: L.tr("Esc · ˅ свернуть")
           color: root.dim
           font.family: root.fontFamily
@@ -169,6 +170,7 @@ Item {
               Icon { anchors.verticalCenter: parent.verticalCenter; name: root.logic && root.logic.videoMode !== "audio" ? "monitor-play" : "headphones"; size: Style.space(11); color: "#FFFFFF" }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: root.logic && root.logic.videoMode !== "audio" ? L.tr("ВИДЕО") : L.tr("АУДИО")
                 color: "#FFFFFF"
                 font.family: root.fontFamily
@@ -243,8 +245,8 @@ Item {
           Item {
             width: parent.width
             height: Style.space(14)
-            Text { anchors.left: parent.left; text: seek.formatTime(seek.position); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
-            Text { anchors.right: parent.right; text: seek.formatTime(root.duration); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+            Text { anchors.left: parent.left; textFormat: Text.PlainText; text: seek.formatTime(seek.position); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+            Text { anchors.right: parent.right; textFormat: Text.PlainText; text: seek.formatTime(root.duration); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
           }
         }
 
@@ -284,7 +286,7 @@ Item {
                 name: root.playState === "loading" ? "loader-circle" : (root.playState === "playing" ? "pause" : "play")
                 size: Style.space(20)
                 color: Color.accent
-                NumberAnimation on rotation { running: root.playState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+                NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.playState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
               }
               MouseArea {
                 id: sheetPlay
@@ -345,6 +347,7 @@ Item {
           Text {
             id: volumeLabel
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: Math.round(parent.shown) + "%"
             color: root.dim
             font.family: root.fontFamily
@@ -392,6 +395,7 @@ Item {
         Text {
           visible: root.tab === "chapters" && root.chapters.length === 0
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: L.tr("В этом видео нет глав")
           color: root.dim
           font.family: root.fontFamily
@@ -426,6 +430,7 @@ Item {
               Text {
                 width: Style.space(44)
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: seek.formatTime(chapterRow.modelData.start)
                 color: chapterRow.active ? Color.accent : root.dim
                 font.family: root.fontFamily
@@ -454,6 +459,7 @@ Item {
                 Text {
                   id: tagText
                   anchors.centerIn: parent
+                  textFormat: Text.PlainText
                   text: String(seek.categoryLabels[chapterRow.tag] || chapterRow.tag).toUpperCase()
                   color: seek.categoryColors[chapterRow.tag] || Color.accent
                   font.family: root.fontFamily
@@ -464,6 +470,7 @@ Item {
               Text {
                 id: durationText
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: chapterRow.active ? L.tr("осталось ") + seek.formatTime(root.chapterEnd(chapterRow.index) - root.position)
                   : seek.formatTime(root.chapterEnd(chapterRow.index) - Number(chapterRow.modelData.start))
                 color: chapterRow.active ? Color.accent : root.dim
@@ -485,6 +492,7 @@ Item {
         Text {
           visible: root.tab === "queue" && root.upcoming.length === 0
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: L.tr("Дальше в очереди ничего нет")
           color: root.dim
           font.family: root.fontFamily

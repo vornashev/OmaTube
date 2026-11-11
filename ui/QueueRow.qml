@@ -260,11 +260,12 @@ FocusScope {
           : root.rowState === "unavailable" ? root.dim
           : root.current || leadMouse.containsMouse ? Color.accent
           : root.engaged ? root.foreground : root.dim
-        NumberAnimation on rotation { running: root.rowState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+        NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.rowState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
       }
       Text {
         visible: !root.selectionMode && lead.glyph === "" && root.rowState !== "playing"
         anchors.centerIn: parent
+        textFormat: Text.PlainText
         text: String(root.rowNumber)
         color: root.dim
         font.family: root.fontFamily
@@ -328,6 +329,7 @@ FocusScope {
           Text {
             id: tagLabel
             anchors.centerIn: parent
+            textFormat: Text.PlainText
             text: tag.label
             color: tag.label === L.tr("ДАЛЕЕ") ? Color.background : Color.accent
             font.family: root.fontFamily
@@ -371,7 +373,7 @@ FocusScope {
           width: parent.width * .4
           height: parent.height
           color: Color.accent
-          NumberAnimation on x { running: loadingTrack.visible; loops: Animation.Infinite; from: -loadingBar.width; to: loadingTrack.width; duration: 1000; easing.type: Easing.InOutQuad }
+          NumberAnimation on x { running: loadingBar.visible && loadingBar.Window.window !== null && loadingBar.Window.window.visible; loops: Animation.Infinite; from: -loadingBar.width; to: loadingTrack.width; duration: 1000; easing.type: Easing.InOutQuad }
         }
       }
     }
@@ -385,6 +387,7 @@ FocusScope {
         visible: !root.showActions && !root.busy
         anchors.verticalCenter: parent.verticalCenter
         rightPadding: root.saved ? Style.space(4) : 0
+        textFormat: Text.PlainText
         text: root.trailingText
         color: root.rowState === "playing" ? Color.accent : root.dim
         font.family: root.fontFamily
@@ -523,9 +526,9 @@ FocusScope {
     else if (action === "channel") channelRequested({ source: "youtube", kind: "channel", id: L.tb(media.authorId), title: L.tb(media.author || "") })
     else if (action === "copylink") {
       if (logic) logic.copyLink(media.canonicalUrl, 0)
-      else Quickshell.execDetached(["wl-copy", String(media.canonicalUrl)])
+      else Quickshell.execDetached(["/usr/bin/wl-copy", String(media.canonicalUrl)])
     }
-    else if (action === "browser") Quickshell.execDetached(["xdg-open", String(media.canonicalUrl)])
+    else if (action === "browser") Quickshell.execDetached(["/usr/bin/xdg-open", String(media.canonicalUrl)])
     else if (action === "up") moveRequested(-1)
     else if (action === "down") moveRequested(1)
     else if (action === "remove") removeRequested()

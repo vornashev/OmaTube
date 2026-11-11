@@ -8,6 +8,7 @@ from typing import Any, Awaitable, Callable
 
 from .errors import OmaTubeError
 from .resolver import ResolvedMedia, ResolvedStream
+from .tools import system_tool
 
 MAX_RESPONSE = 1024 * 1024
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
@@ -162,7 +163,7 @@ class MpvController:
         self.socket_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.socket_path.unlink(missing_ok=True)
         argv = [
-            "mpv",
+            system_tool("mpv"),
             "--idle=yes",
             "--no-config",
             "--vid=no",
@@ -412,7 +413,7 @@ class MpvController:
     async def _hyprctl(self, *args: str) -> str:
         try:
             process = await asyncio.create_subprocess_exec(
-                "hyprctl", *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                system_tool("hyprctl"), *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
             )
         except FileNotFoundError as exc:
             raise OmaTubeError("video_error", "Не найден hyprctl") from exc

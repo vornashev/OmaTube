@@ -1,5 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
+# System directories only: a binary planted earlier in the user's PATH must not run as part of setup.
+export PATH=/usr/local/bin:/usr/bin
 
 PLUGIN_ID="vornashev.omatube"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,6 +55,7 @@ if [[ "$(realpath "$ROOT")" != "$(realpath "$PLUGIN_DIR")" ]]; then
   cp -R "$ROOT/ui" "$PLUGIN_DIR/ui"
   for file in "$ROOT"/backend/*.py "$ROOT"/backend/*.lua; do install -m 644 "$file" "$PLUGIN_DIR/backend/$(basename "$file")"; done
   install -m 755 "$ROOT/catalog/worker.mjs" "$PLUGIN_DIR/catalog/worker.mjs"
+  install -m 644 "$ROOT/catalog/cache.mjs" "$PLUGIN_DIR/catalog/cache.mjs"
   install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$PLUGIN_DIR/scripts/patch-youtubei.mjs"
   install -m 755 "$ROOT/scripts/build-firefox-extension.sh" "$PLUGIN_DIR/scripts/build-firefox-extension.sh"
   install -m 755 "$ROOT/bin/omatube" "$PLUGIN_DIR/bin/omatube"
@@ -64,6 +67,7 @@ fi
 
 for file in "$ROOT"/backend/*.py "$ROOT"/backend/*.lua; do install -m 644 "$file" "$APP_DIR/backend/$(basename "$file")"; done
 install -m 755 "$ROOT/catalog/worker.mjs" "$APP_DIR/catalog/worker.mjs"
+install -m 644 "$ROOT/catalog/cache.mjs" "$APP_DIR/catalog/cache.mjs"
 install -m 755 "$ROOT/scripts/patch-youtubei.mjs" "$APP_DIR/scripts/patch-youtubei.mjs"
 install -m 644 "$ROOT/requirements.lock" "$ROOT/package.json" "$ROOT/package-lock.json" "$APP_DIR/"
 install -m 755 "$ROOT/bin/omatube" "$HOME/.local/bin/omatube"

@@ -27,7 +27,26 @@ Panel {
   readonly property bool shelf: format === "shelf" && panel.contentWidth >= Style.space(820)
   readonly property bool wide: format !== "compact" && !shelf
     && panel.contentWidth >= Style.space(820)
-  readonly property string collectionSection: collectionLoader.item ? collectionLoader.item.section : "saved"
+  property string collectionSection: "saved"
+  function pageLoaders() {
+    return [nowLoader, searchLoader, collectionLoader, playlistLoader, subscriptionsLoader,
+      downloadsLoader, historyLoader, statsLoader, settingsLoader]
+  }
+  function saveViewState() {
+    var pages = ({})
+    pageLoaders().forEach(function(loader) { pages[loader.objectName] = loader.captureState() })
+    return { page: page, playlistId: playlistId, collectionSection: collectionSection,
+      settingsOpen: settingsOpen, sheetTab: sheetTab, pages: pages }
+  }
+  function restoreViewState(state) {
+    if (!state) return
+    pageLoaders().forEach(function(loader) { loader.savedState = state.pages[loader.objectName] || null })
+    playlistId = state.playlistId || ""
+    collectionSection = state.collectionSection || "saved"
+    page = Number(state.page || 0)
+    settingsOpen = state.settingsOpen === true
+    sheetTab = state.sheetTab || "chapters"
+  }
   readonly property var barIdentity: hostWidget || root
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color dim: Qt.darker(foreground, 1.5)
@@ -55,10 +74,12 @@ Panel {
   function showPage(index) { settingsOpen = false; page = index }
   function openSearch() {
     showPage(1)
-    Qt.callLater(searchPage.focusQuery)
+    var search = searchLoader.ensureLoaded()
+    if (search) Qt.callLater(function() { search.focusQuery() })
   }
   function openSection(section) {
     settingsOpen = false
+    collectionSection = section
     page = 2
     if (collectionLoader.item) collectionLoader.item.section = section
   }
@@ -72,15 +93,23 @@ Panel {
   function openChannel(entity, returnPage) {
     settingsOpen = false
     page = 1
-    searchPage.returnToCollection = false
-    searchPage.returnPage = returnPage === undefined ? -1 : returnPage
-    searchPage.openEntity(entity)
+    var search = searchLoader.ensureLoaded()
+    if (!search) return
+    search.returnToCollection = false
+    search.returnPage = returnPage === undefined ? -1 : returnPage
+    search.openEntity(entity)
   }
   function openPicker(media, anchorItem) {
     pickerAnchor = anchorItem || null
-    playlistPicker.media = media
-    playlistPicker.anchorItem = pickerAnchor
-    playlistPicker.open()
+    var picker = pickerLoader.ensureLoaded()
+    if (!picker) return
+    picker.media = media
+    picker.anchorItem = pickerAnchor
+    picker.open()
+  }
+  function openSessions() {
+    var dialog = sessionsLoader.ensureLoaded()
+    if (dialog) dialog.open()
   }
 
   KeyboardPanel {
@@ -216,37 +245,52 @@ Panel {
                 - root.dockHeight)
               currentIndex: root.page
 
-              NowPage {
-                wide: root.wide
-                logic: root.logic
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onPlaylistPickerRequested: (media, anchorItem) => root.openPicker(media, anchorItem)
-                onChannelRequested: entity => root.openChannel(entity, 0)
-                onSessionsRequested: sessionsDialog.open()
-              }
-              Item {
-                SearchPage {
-                  id: searchPage
-                  anchors.fill: parent
+              RetainedLoader {
+                id: nowLoader
+                objectName: "nowLoader"
+                unloadAfter: 10 * 60 * 1000
+                needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 0
+                sourceComponent: NowPage {
+                  wide: root.wide
                   logic: root.logic
                   foreground: root.foreground
                   fontFamily: root.fontFamily
-                  onPlaylistPickerRequested: media => root.openPicker(media)
-                  onCollectionRequested: root.page = 2
-                  onPageRequested: index => root.page = index
+                  onPlaylistPickerRequested: (media, anchorItem) => root.openPicker(media, anchorItem)
+                  onChannelRequested: entity => root.openChannel(entity, 0)
+                  onSessionsRequested: root.openSessions()
                 }
               }
               Item {
-                Loader {
+                RetainedLoader {
+                  id: searchLoader
+                  objectName: "searchLoader"
+                  unloadAfter: 10 * 60 * 1000
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 1
+                  anchors.fill: parent
+                  sourceComponent: SearchPage {
+                    logic: root.logic
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    onPlaylistPickerRequested: media => root.openPicker(media)
+                    onCollectionRequested: root.page = 2
+                    onPageRequested: index => root.page = index
+                  }
+                }
+              }
+              Item {
+                RetainedLoader {
                   id: collectionLoader
+                  objectName: "collectionLoader"
+                  unloadAfter: 10 * 60 * 1000
                   anchors.fill: parent
                   anchors.leftMargin: root.wide ? Style.space(24) : 0
                   anchors.rightMargin: root.wide ? Style.space(24) : 0
                   anchors.topMargin: root.wide ? Style.space(20) : 0
                   anchors.bottomMargin: root.wide ? Style.space(20) : 0
-                  active: true
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 2
                   sourceComponent: CollectionPage {
+                    section: root.collectionSection
+                    onSectionChanged: root.collectionSection = section
                     logic: root.logic
                     foreground: root.foreground
                     fontFamily: root.fontFamily
@@ -254,134 +298,179 @@ Panel {
                     onMediaPickerRequested: media => root.openPicker(media)
                     onEntityRequested: entity => {
                       root.page = 1
-                      searchPage.returnToCollection = true
-                      searchPage.openEntity(entity)
+                      var search = searchLoader.ensureLoaded()
+                      if (search) {
+                        search.returnToCollection = true
+                        search.openEntity(entity)
+                      }
                     }
                   }
                 }
               }
               Item {
-                PlaylistPage {
+                RetainedLoader {
+                  id: playlistLoader
+                  objectName: "playlistLoader"
+                  unloadAfter: 10 * 60 * 1000
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 3
                   anchors.fill: parent
                   anchors.leftMargin: root.wide ? Style.space(24) : 0
                   anchors.rightMargin: root.wide ? Style.space(24) : 0
                   anchors.topMargin: root.wide ? Style.space(20) : 0
                   anchors.bottomMargin: root.wide ? Style.space(20) : 0
-                  logic: root.logic
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                  playlistId: root.playlistId
-                  onSectionRequested: section => { root.playlistId = ""; root.pickerMedia = null; root.openSection(section) }
-                  pendingMedia: root.pickerMedia
-                  onPendingMediaChanged: root.pickerMedia = pendingMedia
-                  onCloseRequested: {
-                    root.page = 2
-                    root.playlistId = ""
-                    root.pickerMedia = null
-                    if (collectionLoader.item) collectionLoader.item.load()
+                  sourceComponent: PlaylistPage {
+                    logic: root.logic
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    playlistId: root.playlistId
+                    onSectionRequested: section => { root.playlistId = ""; root.pickerMedia = null; root.openSection(section) }
+                    pendingMedia: root.pickerMedia
+                    onPendingMediaChanged: root.pickerMedia = pendingMedia
+                    onCloseRequested: {
+                      root.page = 2
+                      root.playlistId = ""
+                      root.pickerMedia = null
+                      if (collectionLoader.item) collectionLoader.item.load()
+                    }
                   }
                 }
               }
               Item {
-                SubscriptionsPage {
+                RetainedLoader {
+                  id: subscriptionsLoader
+                  objectName: "subscriptionsLoader"
+                  unloadAfter: 10 * 60 * 1000
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 4
                   anchors.fill: parent
-                  logic: root.logic
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                  onChannelRequested: entity => root.openChannel(entity, 4)
+                  sourceComponent: SubscriptionsPage {
+                    logic: root.logic
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                    onChannelRequested: entity => root.openChannel(entity, 4)
+                  }
                 }
               }
               Item {
-                DownloadsPage {
+                RetainedLoader {
+                  id: downloadsLoader
+                  objectName: "downloadsLoader"
+                  unloadAfter: 10 * 60 * 1000
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 5
                   anchors.fill: parent
                   anchors.leftMargin: root.wide ? Style.space(24) : 0
                   anchors.rightMargin: root.wide ? Style.space(24) : 0
                   anchors.topMargin: root.wide ? Style.space(20) : 0
                   anchors.bottomMargin: root.wide ? Style.space(20) : 0
-                  logic: root.logic
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
+                  sourceComponent: DownloadsPage {
+                    logic: root.logic
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                  }
                 }
               }
               // 6: Home used to live here; it is the empty search page now. Kept so page numbers stay put.
               Item {}
               Item {
-                HistoryPage {
+                RetainedLoader {
+                  id: historyLoader
+                  objectName: "historyLoader"
+                  unloadAfter: 10 * 60 * 1000
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 7
                   anchors.fill: parent
                   anchors.leftMargin: root.wide ? 0 : Style.space(0)
-                  logic: root.logic
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
+                  sourceComponent: HistoryPage {
+                    logic: root.logic
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                  }
                 }
               }
               Item {
-                StatsPage {
+                RetainedLoader {
+                  id: statsLoader
+                  objectName: "statsLoader"
+                  unloadAfter: 10 * 60 * 1000
+                  needed: root.opened && !root.shelf && !root.settingsOpen && root.page === 8
                   anchors.fill: parent
-                  logic: root.logic
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
+                  sourceComponent: StatsPage {
+                    logic: root.logic
+                    foreground: root.foreground
+                    fontFamily: root.fontFamily
+                  }
                 }
               }
             }
 
-            MiniPlayer {
+            RetainedLoader {
               id: miniPlayer
               visible: !root.wide && root.page !== 0
+              needed: root.opened && !root.shelf && visible
               width: parent.width
               height: visible ? implicitHeight : 0
-              logic: root.logic
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              onExpandRequested: root.showPage(0)
+              sourceComponent: MiniPlayer {
+                logic: root.logic
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onExpandRequested: root.showPage(0)
+              }
             }
           }
 
-          PlayerSheet {
+          RetainedLoader {
             id: playerSheet
             z: 45
             anchors.fill: parent
-            open: root.sheetOpen && root.showDock
-            tab: root.sheetTab
-            onTabChanged: root.sheetTab = tab
-            logic: root.logic
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            surface: root.surface
-            onCloseRequested: root.sheetOpen = false
-            onNowRequested: root.showPage(0)
-          }
-
-          ThinPlayer {
-            id: thinPlayer
-            z: 40
-            visible: root.showDock && root.playerDock !== "bar"
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: implicitHeight
-            logic: root.logic
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            surface: root.surface
-            onSheetRequested: tab => {
-              if (root.sheetOpen && tab === "") root.sheetOpen = false
-              else root.openSheet(tab)
+            needed: root.opened && root.sheetOpen && root.showDock
+            sourceComponent: PlayerSheet {
+              open: root.sheetOpen && root.showDock
+              tab: root.sheetTab
+              onTabChanged: root.sheetTab = tab
+              logic: root.logic
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              surface: root.surface
+              onCloseRequested: root.sheetOpen = false
+              onNowRequested: root.showPage(0)
             }
           }
 
-          PlayerBar {
-            id: playerBar
+          RetainedLoader {
+            id: thinPlayer
             z: 40
-            visible: root.showDock && root.playerDock === "bar"
+            visible: root.showDock && root.playerDock !== "bar"
+            needed: root.opened && !root.shelf && visible
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: implicitHeight
-            logic: root.logic
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            surface: root.surface
-            onExpandRequested: root.showPage(0)
+            sourceComponent: ThinPlayer {
+              logic: root.logic
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              surface: root.surface
+              onSheetRequested: tab => {
+                if (root.sheetOpen && tab === "") root.sheetOpen = false
+                else root.openSheet(tab)
+              }
+            }
+          }
+
+          RetainedLoader {
+            id: playerBar
+            z: 40
+            visible: root.showDock && root.playerDock === "bar"
+            needed: root.opened && !root.shelf && visible
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: implicitHeight
+            sourceComponent: PlayerBar {
+              logic: root.logic
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              surface: root.surface
+              onExpandRequested: root.showPage(0)
+            }
           }
 
           Toast {
@@ -420,12 +509,15 @@ Panel {
             z: 50
             anchors.fill: parent
             color: Qt.rgba(Color.popups.background.r, Color.popups.background.g, Color.popups.background.b, 1)
-            ShelfPanel {
+            RetainedLoader {
               anchors.fill: parent
-              logic: root.logic
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              onExpandRequested: root.logic.request("setting", { key: "panelFormat", value: "wide" })
+              needed: root.opened && root.shelf
+              sourceComponent: ShelfPanel {
+                logic: root.logic
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onExpandRequested: root.logic.request("setting", { key: "panelFormat", value: "wide" })
+              }
             }
           }
 
@@ -435,12 +527,15 @@ Panel {
             z: 200
             anchors.fill: parent
             color: Qt.rgba(Color.popups.background.r, Color.popups.background.g, Color.popups.background.b, 1)
-            OnboardingPage {
+            RetainedLoader {
               anchors.fill: parent
-              logic: root.logic
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              format: root.wide ? "wide" : "compact"
+              needed: root.opened && onboardingLayer.visible
+              sourceComponent: OnboardingPage {
+                logic: root.logic
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                format: root.wide ? "wide" : "compact"
+              }
             }
           }
 
@@ -451,31 +546,43 @@ Panel {
             anchors.fill: parent
             color: Qt.rgba(Color.popups.background.r, Color.popups.background.g, Color.popups.background.b, 1)
             MouseArea { anchors.fill: parent }
-            SettingsPage {
+            RetainedLoader {
+              id: settingsLoader
               anchors.fill: parent
-              logic: root.logic
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-              onCloseRequested: root.settingsOpen = false
+              objectName: "settingsLoader"
+              unloadAfter: 10 * 60 * 1000
+              needed: root.opened && root.settingsOpen
+              sourceComponent: SettingsPage {
+                logic: root.logic
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+                onCloseRequested: root.settingsOpen = false
+              }
             }
           }
         }
       }
 
-      SessionsDialog {
-        id: sessionsDialog
-        logic: root.logic
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        queueCount: root.logic && root.logic.details.queue ? root.logic.details.queue.length : 0
+      RetainedLoader {
+        id: sessionsLoader
+        objectName: "sessionsLoader"
+        sourceComponent: SessionsDialog {
+          logic: root.logic
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          queueCount: root.logic && root.logic.details.queue ? root.logic.details.queue.length : 0
+        }
       }
 
-      PlaylistPicker {
-        id: playlistPicker
-        logic: root.logic
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        boundsItem: keyScope
+      RetainedLoader {
+        id: pickerLoader
+        objectName: "pickerLoader"
+        sourceComponent: PlaylistPicker {
+          logic: root.logic
+          foreground: root.foreground
+          fontFamily: root.fontFamily
+          boundsItem: keyScope
+        }
       }
 
       Rectangle {
@@ -499,6 +606,7 @@ Panel {
           Icon { anchors.verticalCenter: parent.verticalCenter; name: "wifi-off"; size: Style.space(12); color: Color.urgent }
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("медленная сеть")
             color: root.foreground
             font.family: root.fontFamily
@@ -517,11 +625,12 @@ Panel {
         width: Style.space(28)
         height: width
         Icon {
+          id: busySpinner
           anchors.centerIn: parent
           name: "loader-circle"
           size: Style.space(16)
           color: Color.accent
-          RotationAnimator on rotation { running: busyIndicator.visible; from: 0; to: 360; duration: 800; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
+          RotationAnimator on rotation { running: busySpinner.animationVisible; from: 0; to: 360; duration: 800; loops: Animation.Infinite; onRunningChanged: if (!running && busySpinner) busySpinner.rotation = 0 }
         }
         MouseArea {
           id: busyMouse

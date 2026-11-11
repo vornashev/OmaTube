@@ -132,6 +132,7 @@ Popup {
             visible: searchField.text === ""
             anchors.fill: parent
             verticalAlignment: Text.AlignVCenter
+            textFormat: Text.PlainText
             text: L.tr("Найти плейлист")
             color: root.muted
             font: searchField.font
@@ -195,6 +196,7 @@ Popup {
           Text {
             id: countLabel
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: String(modelData.itemCount !== undefined ? modelData.itemCount : "")
             color: root.muted
             font.family: root.fontFamily
@@ -235,6 +237,7 @@ Popup {
             visible: newField.text === ""
             anchors.fill: parent
             verticalAlignment: Text.AlignVCenter
+            textFormat: Text.PlainText
             text: L.tr("Новый плейлист…")
             color: Color.accent
             font: newField.font

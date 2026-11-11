@@ -85,6 +85,7 @@ Item {
         width: parent.width - formatRow.width
         anchors.verticalCenter: parent.verticalCenter
         Text {
+          textFormat: Text.PlainText
           text: L.tr("Загрузки")
           color: root.foreground
           font.family: root.fontFamily
@@ -93,6 +94,7 @@ Item {
         }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: String(root.summary.directory || "").replace(/^\/home\/[^/]+/, "~") + " · " + root.formatSize(root.summary.used)
             + (root.summary.free ? L.tr(" · свободно ") + root.formatSize(root.summary.free) : "")
           color: root.dim
@@ -135,6 +137,7 @@ Item {
         width: parent.width - Style.space(40)
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
         text: L.tr("Пока ничего не скачано. Выберите «Скачать» в меню трека (ПКМ) или в параметрах плеера.")
         color: root.dim
         font.family: root.fontFamily
@@ -151,6 +154,7 @@ Item {
       Text {
         id: headerLabel
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: entry.label
         color: root.dim
         font.family: root.fontFamily
@@ -168,6 +172,7 @@ Item {
         id: actionLabel
         anchors.verticalCenter: parent.verticalCenter
         visible: entry.action !== undefined
+        textFormat: Text.PlainText
         text: entry.action || ""
         color: Color.accent
         font.family: root.fontFamily
@@ -177,7 +182,7 @@ Item {
           anchors.margins: -Style.space(4)
           cursorShape: Qt.PointingHandCursor
           onClicked: {
-            if (entry.command === "open_folder") Quickshell.execDetached(["xdg-open", String(root.summary.directory)])
+            if (entry.command === "open_folder") Quickshell.execDetached(["/usr/bin/xdg-open", String(root.summary.directory)])
             else root.logic.request(entry.command, ({}))
           }
         }
@@ -265,7 +270,7 @@ Item {
               if (row.state === "running") root.logic.request("download_pause", { id: row.id })
               else if (row.state === "paused") root.logic.request("download_resume", { id: row.id })
               else if (row.state === "failed") root.logic.request("download_retry", { id: row.id })
-              else if (row.filepath) Quickshell.execDetached(["xdg-open", String(row.filepath)])
+              else if (row.filepath) Quickshell.execDetached(["/usr/bin/xdg-open", String(row.filepath)])
             }
           }
           IconButton {
@@ -276,7 +281,7 @@ Item {
             tooltipText: L.tr("Показать в папке")
             foreground: root.foreground
             fontFamily: root.fontFamily
-            onClicked: Quickshell.execDetached(["xdg-open", String(root.summary.directory)])
+            onClicked: Quickshell.execDetached(["/usr/bin/xdg-open", String(root.summary.directory)])
           }
           IconButton {
             icon: row.state === "done" ? "trash-2" : "x"

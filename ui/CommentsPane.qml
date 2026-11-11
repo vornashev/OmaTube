@@ -73,6 +73,7 @@ Item {
           font.bold: true
         }
         Text {
+          textFormat: Text.PlainText
           text: modelData.published
           color: root.dim
           font.family: root.fontFamily
@@ -92,6 +93,7 @@ Item {
       }
       Text {
         visible: String(modelData.likes) !== "" || modelData.replies > 0
+        textFormat: Text.PlainText
         text: "♥ " + modelData.likes + (modelData.replies > 0 ? L.tr("   ·   ответов: ") + modelData.replies : "")
         color: root.dim
         font.family: root.fontFamily
@@ -116,6 +118,7 @@ Item {
       width: parent.width - Style.space(40)
       horizontalAlignment: Text.AlignHCenter
       wrapMode: Text.WordWrap
+      textFormat: Text.PlainText
       text: root.videoId === "" ? L.tr("Включите видео, чтобы увидеть комментарии")
         : (root.loading ? L.tr("Загружаем комментарии…") : (root.error !== "" ? root.error : L.tr("Комментариев нет или они отключены")))
       color: root.error !== "" ? Color.urgent : root.dim

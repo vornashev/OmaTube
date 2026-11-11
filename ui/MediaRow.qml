@@ -203,7 +203,7 @@ Rectangle {
         color: root.rowState === "error" ? Color.urgent
           : (root.rowState === "loading" || root.rowState === "paused" ? Color.accent
           : (root.hovered && root.rowState === "" ? root.foreground : root.dim))
-        NumberAnimation on rotation { running: root.rowState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+        NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.rowState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
       }
       Text {
         visible: parent.glyph === "" && root.rowState !== "playing"
@@ -285,7 +285,7 @@ Rectangle {
           width: parent.width * .4
           height: parent.height
           color: Color.accent
-          NumberAnimation on x { running: loadingTrack.visible; loops: Animation.Infinite; from: -loadingBar.width; to: loadingTrack.width; duration: 1000; easing.type: Easing.InOutQuad }
+          NumberAnimation on x { running: loadingBar.visible && loadingBar.Window.window !== null && loadingBar.Window.window.visible; loops: Animation.Infinite; from: -loadingBar.width; to: loadingTrack.width; duration: 1000; easing.type: Easing.InOutQuad }
         }
       }
     }
@@ -312,6 +312,7 @@ Rectangle {
         visible: !queueMark.visible && root.rowState !== "loading" && root.rowState !== "error"
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.active ? root.positionText : (root.rowState === "unavailable" ? "—" : root.formatDuration(root.media.duration))
         color: root.rowState === "playing" ? Color.accent : root.dim
         font.family: root.fontFamily
@@ -440,9 +441,9 @@ Rectangle {
     else if (action === "channel") channelRequested({ source: "youtube", kind: "channel", id: L.tb(media.authorId), title: L.tb(media.author || "") })
     else if (action === "copylink") {
       if (logic) logic.copyLink(media.canonicalUrl, 0)
-      else Quickshell.execDetached(["wl-copy", String(media.canonicalUrl)])
+      else Quickshell.execDetached(["/usr/bin/wl-copy", String(media.canonicalUrl)])
     }
-    else if (action === "browser") Quickshell.execDetached(["xdg-open", String(media.canonicalUrl)])
+    else if (action === "browser") Quickshell.execDetached(["/usr/bin/xdg-open", String(media.canonicalUrl)])
     else if (action === "up") moveUpRequested(item)
     else if (action === "down") moveDownRequested(item)
     else if (action === "remove") removeRequested(item)

@@ -299,6 +299,7 @@ Rectangle {
         spacing: Style.space(4)
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: root.nowHead()
           color: root.nowColor
           font.family: root.fontFamily
@@ -396,6 +397,7 @@ Rectangle {
           Text {
             width: parent.width - Style.space(16) - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("Медиатека")
             color: libraryButton.selected ? Color.accent : root.foreground
             font.family: root.fontFamily
@@ -453,6 +455,7 @@ Rectangle {
       topPadding: Style.space(14)
       Text {
         width: parent.width - parent.leftPadding - parent.rightPadding - countLabel.width
+        textFormat: Text.PlainText
         text: L.tr("ПЛЕЙЛИСТЫ")
         color: root.dim
         font.family: root.fontFamily
@@ -462,6 +465,7 @@ Rectangle {
       }
       Text {
         id: countLabel
+        textFormat: Text.PlainText
         text: String(root.playlists.length)
         color: root.dim
         font.family: root.fontFamily
@@ -521,6 +525,7 @@ Rectangle {
               spacing: Style.space(2)
               Text {
                 width: parent.width
+                textFormat: Text.PlainText
                 text: L.tr("Моя очередь")
                 color: root.queueActive ? Color.accent : root.foreground
                 font.family: root.fontFamily
@@ -530,6 +535,7 @@ Rectangle {
               }
               Text {
                 width: parent.width
+                textFormat: Text.PlainText
                 text: root.queueMeta()
                 color: root.dim
                 font.family: root.fontFamily
@@ -620,6 +626,7 @@ Rectangle {
                 }
                 Text {
                   width: parent.width
+                  textFormat: Text.PlainText
                   text: root.trackCount(row.count) + (row.playing ? " · " + L.tr("играет")
                     : row.paused ? " · " + L.tr("на паузе") + (root.sourcePlace !== "" ? " " + root.sourcePlace : "") : "")
                   color: root.dim

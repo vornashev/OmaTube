@@ -122,7 +122,7 @@ Rectangle {
       width: parent.width
       height: Style.space(13)
       spacing: Style.space(10)
-      Text { id: posLabel; width: Style.space(28); text: root.formatTime(root.position); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+      Text { id: posLabel; width: Style.space(28); textFormat: Text.PlainText; text: root.formatTime(root.position); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
       Item {
         width: parent.width - posLabel.width - durLabel.width - parent.spacing * 2
         height: parent.height
@@ -154,7 +154,7 @@ Rectangle {
           onCanceled: root.seeking = false
         }
       }
-      Text { id: durLabel; width: Style.space(28); horizontalAlignment: Text.AlignRight; text: root.formatTime(root.duration); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+      Text { id: durLabel; width: Style.space(28); horizontalAlignment: Text.AlignRight; textFormat: Text.PlainText; text: root.formatTime(root.duration); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
     }
 
     Item {

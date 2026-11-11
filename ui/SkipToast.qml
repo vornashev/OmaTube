@@ -76,6 +76,7 @@ Rectangle {
     Text {
       id: actionLabel
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: root.pending ? L.tr("ПРОПУСТИТЬ") : L.tr("ВЕРНУТЬ")
       color: Color.accent
       font.family: root.fontFamily
@@ -93,6 +94,7 @@ Rectangle {
       id: dismissLabel
       visible: root.pending !== null
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: "✕"
       color: root.foreground
       opacity: .6

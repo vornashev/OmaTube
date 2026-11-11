@@ -49,6 +49,7 @@ Item {
       spacing: Style.space(2)
       Text {
         width: parent.width
+        textFormat: Text.PlainText
         text: row.label
         color: row.foreground
         font.family: row.fontFamily
@@ -58,6 +59,7 @@ Item {
       Text {
         visible: row.description !== ""
         width: parent.width
+        textFormat: Text.PlainText
         text: row.description
         color: row.dim
         font.family: row.fontFamily

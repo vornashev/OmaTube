@@ -141,6 +141,7 @@ Item {
       Text {
         id: flashLabel
         anchors.centerIn: parent
+        textFormat: Text.PlainText
         text: root.flashText
         color: Color.background
         font.family: root.fontFamily
@@ -152,6 +153,7 @@ Item {
       anchors.verticalCenter: parent.verticalCenter
       rightPadding: Style.space(12)
       leftPadding: Style.space(6)
+      textFormat: Text.PlainText
       text: timeline.formatTime(root.scrubbing ? root.scrubSeconds : Number(root.stateData.position || 0))
         + " / " + timeline.formatTime(root.duration)
       color: root.scrubbing || root.flashText !== "" ? Color.accent : root.dim
@@ -181,7 +183,7 @@ Item {
         name: root.playState === "loading" ? "loader-circle" : (root.playState === "playing" ? "pause" : "play")
         size: Style.space(16)
         color: Color.accent
-        NumberAnimation on rotation { running: root.playState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+        NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.playState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
       }
       MouseArea {
         id: playMouse

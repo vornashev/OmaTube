@@ -25,7 +25,7 @@ Row {
       height: Math.max(root.barWidth, root.maxHeight * level)
       color: root.color
       SequentialAnimation on level {
-        running: root.running
+        running: root.running && bar.visible && bar.Window.window !== null && bar.Window.window.visible
         loops: Animation.Infinite
         NumberAnimation { to: 1; duration: 260 + bar.index * 70; easing.type: Easing.InOutSine }
         NumberAnimation { to: .25; duration: 300 + bar.index * 50; easing.type: Easing.InOutSine }

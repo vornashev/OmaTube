@@ -101,7 +101,7 @@ Item {
 
   Process {
     id: clipboardProcess
-    command: ["wl-paste", "--no-newline"]
+    command: ["/usr/bin/wl-paste", "--no-newline"]
     stdout: StdioCollector { id: clipboardOut; waitForEnd: true }
     onExited: function(code) {
       var text = code === 0 ? String(clipboardOut.text || "").trim() : ""
@@ -470,6 +470,7 @@ Item {
             visible: urlField.text === ""
             anchors.fill: parent
             verticalAlignment: Text.AlignVCenter
+            textFormat: Text.PlainText
             text: L.tr("Вставьте ссылку на видео или плейлист")
             color: root.dim
             font: urlField.font
@@ -479,6 +480,7 @@ Item {
         Text {
           id: hint
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: urlField.text === "" ? "" : L.tr("⏎ играть")
           color: root.dim
           font.family: root.fontFamily
@@ -508,6 +510,7 @@ Item {
       Text {
         id: countLabel
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.queue.length > 0 ? (root.currentIndex + 1) + " / " + root.queue.length
           + (root.totalDuration !== "" ? " · " + root.totalDuration : "") : ""
         color: root.dim
@@ -553,6 +556,7 @@ Item {
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "list-video"; size: Style.space(28); color: root.dim }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: root.myQueue ? L.tr("Моя очередь пуста") : L.tr("Очередь пуста")
           color: root.foreground
           font.family: root.fontFamily
@@ -562,6 +566,7 @@ Item {
         }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: L.tr("Найдите что-нибудь в поиске или вставьте ссылку выше — добавим её в очередь.")
           color: root.dim
           font.family: root.fontFamily
@@ -655,7 +660,7 @@ Item {
             onPlaylistRequested: media => root.playlistPickerRequested(media)
             onChannelRequested: entity => root.channelRequested(entity)
             onCommandRequested: (command, payload) => root.request(command, payload)
-            onTimecodeRequested: media => Quickshell.execDetached(["wl-copy", String(media.canonicalUrl) + (String(media.canonicalUrl).indexOf("?") >= 0 ? "&" : "?") + "t=" + Math.floor(root.position)])
+            onTimecodeRequested: media => Quickshell.execDetached(["/usr/bin/wl-copy", String(media.canonicalUrl) + (String(media.canonicalUrl).indexOf("?") >= 0 ? "&" : "?") + "t=" + Math.floor(root.position)])
             onDragStarted: y => root.startDrag(entryId, entryRow, y)
             onDragMoved: y => root.updateDrag(entryRow, y)
             onDragFinished: root.finishDrag()
@@ -692,6 +697,7 @@ Item {
                 Text {
                   id: undoLabel
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: L.tr("ВЕРНУТЬ · ") + Math.ceil(plaque.remaining / 1000)
                   color: Color.accent
                   font.family: root.fontFamily
@@ -777,6 +783,7 @@ Item {
           Text {
             width: parent.width - bulkActions.width - parent.spacing
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("Выбрано: ") + root.selectedCount
             color: root.foreground
             font.family: root.fontFamily
@@ -813,6 +820,7 @@ Item {
                   Icon { anchors.verticalCenter: parent.verticalCenter; name: modelData.icon; size: Style.space(12); color: modelData.danger ? Color.urgent : root.foreground }
                   Text {
                     anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
                     text: modelData.label
                     color: modelData.danger ? Color.urgent : root.foreground
                     font.family: root.fontFamily
@@ -872,6 +880,7 @@ Item {
             Text {
               width: Style.space(46)
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: root.formatTime(modelData.start)
               color: current ? Color.accent : root.dim
               font.family: root.fontFamily
@@ -903,6 +912,7 @@ Item {
                 Text {
                   id: badgeLabel
                   anchors.centerIn: parent
+                  textFormat: Text.PlainText
                   text: badge ? badge.label + badge.extra : ""
                   color: badge ? (root.categoryColors[badge.category] || Color.accent) : root.dim
                   font.family: root.fontFamily
@@ -912,6 +922,7 @@ Item {
               }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: current ? L.tr("осталось ") + root.formatTime(remaining) : root.formatTime(root.chapterEnd(index) - modelData.start)
                 color: current ? Color.accent : root.dim
                 font.family: root.fontFamily
@@ -933,6 +944,7 @@ Item {
       Text {
         visible: root.chapters.length === 0
         anchors.centerIn: parent
+        textFormat: Text.PlainText
         text: root.currentEntry ? L.tr("У этого видео нет глав") : L.tr("Включите видео, чтобы увидеть главы")
         color: root.dim
         font.family: root.fontFamily
@@ -960,6 +972,7 @@ Item {
             Text {
               width: parent.width - Style.space(26) - savedLabel.width - parent.spacing
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: "SPONSORBLOCK"
               color: root.foreground
               font.family: root.fontFamily
@@ -970,6 +983,7 @@ Item {
             Text {
               id: savedLabel
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: L.tr("сэкономлено ") + root.formatTime(root.sponsor ? root.sponsor.saved : 0)
               color: root.dim
               font.family: root.fontFamily
@@ -995,6 +1009,7 @@ Item {
                 Rectangle { anchors.verticalCenter: parent.verticalCenter; width: Style.space(10); height: width; color: root.categoryColors[modelData.category] || Color.accent }
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: (root.categoryLabels[modelData.category] || modelData.category).toLowerCase().replace(/^./, function(c) { return c.toUpperCase() })
                   color: root.foreground
                   font.family: root.fontFamily
@@ -1002,6 +1017,7 @@ Item {
                 }
                 Text {
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: modelData.action === "skip" ? L.tr("пропуск") : (modelData.action === "ask" ? L.tr("спросить") : L.tr("выкл"))
                   color: root.dim
                   font.family: root.fontFamily

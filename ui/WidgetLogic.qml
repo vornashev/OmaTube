@@ -13,7 +13,7 @@ Item {
   readonly property string cli: Quickshell.env("HOME") + "/.local/bin/omatube"
   readonly property string pluginDir: Quickshell.env("HOME") + "/.config/omarchy/plugins/vornashev.omatube"
 
-  property var stateData: ({ state: "idle", current: null, position: 0, duration: null, videoMode: "audio", buffering: false, youtubeAuth: ({ configured: false, authenticated: false, cookieCount: 0, browser: "chromium" }), preferences: ({ videoQuality: 1080 }) })
+  readonly property QtObject stateData: PlayerState {}
   property var details: ({ queue: [], mainQueue: [], views: ({}), operations: [], savedIds: [] })
   property var lastResult: null
   property string lastCommand: ""
@@ -35,8 +35,6 @@ Item {
   property int knownCatalogRevision: -1
   property int knownCollectionRevision: -1
   property var retainedOperationIds: []
-  property bool refreshPending: false
-  property string statusRequestCommand: ""
   property int busySeconds: 0
 
   readonly property bool hasTrack: Boolean(stateData.current && stateData.current.media)
@@ -243,9 +241,14 @@ Item {
     target.logic = root
   }
 
-  function open() { if (panelLoader.item) panelLoader.item.open() }
-  function close() { if (panelLoader.item) panelLoader.item.close() }
-  function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
+  function open() {
+    panelOpenPending = true
+    var panel = panelLoader.ensureLoaded()
+    if (panel && panelOpenPending) { panelOpenPending = false; panel.open() }
+  }
+  property bool panelOpenPending: false
+  function close() { panelOpenPending = false; if (panelLoader.item) panelLoader.item.close() }
+  function toggle() { if (opened || panelOpenPending) close(); else open() }
   function closeForPopoutSwitch() { close() }
   function trackedOperationIds() {
     var values = (retainedOperationIds || []).slice(0)
@@ -269,30 +272,21 @@ Item {
     return false
   }
 
+  readonly property bool wantsDetails: requiresDetails()
+  property int connectionFailures: 0
+  property bool subscriptionFullNeeded: false
+  onWantsDetailsChanged: Qt.callLater(function() { root.refresh() })
+  onRetainedOperationIdsChanged: Qt.callLater(function() { root.refresh() })
+
   function refresh(immediate) {
-    var urgent = immediate !== false
-    if (statusProcess.running) {
-      if (urgent) refreshPending = true
+    if (!stateSocket.connected) {
+      if (!bootstrapProcess.running) stateSocket.connected = true
       return
     }
-    var useDetails = requiresDetails()
-    statusRequestCommand = useDetails ? "details" : "status"
-    if (useDetails) {
-      var request = {
-        command: "details",
-        knownRevisions: {
-          backendSessionId: backendSessionId,
-          queueRevision: knownQueueRevision,
-          catalogRevision: knownCatalogRevision,
-          collectionRevision: knownCollectionRevision
-        },
-        retainedOperationIds: trackedOperationIds()
-      }
-      statusProcess.command = [cli, "request", JSON.stringify(request)]
-    } else {
-      statusProcess.command = [cli, "status"]
-    }
-    statusProcess.running = true
+    stateSocket.write(JSON.stringify({ command: "subscribe", details: wantsDetails,
+      retainedOperationIds: trackedOperationIds(), full: subscriptionFullNeeded }) + "\n")
+    stateSocket.flush()
+    subscriptionFullNeeded = false
   }
 
   readonly property var parallelCommands: ["comments", "lyrics", "downloads", "feed", "subscriptions", "feed_refresh",
@@ -388,7 +382,7 @@ Item {
     if (link === "") return
     var seconds = Math.floor(Number(position || 0))
     if (seconds > 0) link += (link.indexOf("?") >= 0 ? "&" : "?") + "t=" + seconds
-    Quickshell.execDetached(["wl-copy", link])
+    Quickshell.execDetached(["/usr/bin/wl-copy", link])
     notify({ text: seconds > 0 ? L.tr("Ссылка скопирована (с таймкодом ") + formatTime(seconds) + ")" : L.tr("Ссылка скопирована"), icon: "link" })
   }
   function formatTime(value) {
@@ -426,69 +420,77 @@ Item {
     stderr: StdioCollector { id: bootstrapErr; waitForEnd: true }
     onExited: function(code) {
       root.bootstrapError = code === 0 ? "" : String(bootstrapErr.text || L.tr("Не удалось запустить OmaTube")).trim()
-      root.refresh(true)
+      Qt.callLater(function() { root.refresh(true) })
     }
   }
 
-  Process {
-    id: statusProcess
-    command: []
-    stdout: StdioCollector { id: statusOut; waitForEnd: true }
-    onExited: function(code) {
-      var repeatRefresh = root.refreshPending
-      var successful = false
-      root.refreshPending = false
-      if (code !== 0) {
-        root.statusError = L.tr("Фоновый сервис OmaTube недоступен")
-      } else {
-        try {
-          var envelope = JSON.parse(statusOut.text || "{}")
-          if (!envelope.ok)
-            throw new Error(envelope.error ? L.tb(envelope.error.message) : L.tr("Ошибка backend"))
-          var result = envelope.result || ({})
-          var nextSessionId = String(result.backendSessionId || "")
-          if (nextSessionId !== "" && root.backendSessionId !== ""
-              && nextSessionId !== root.backendSessionId) {
-            root.knownQueueRevision = -1
-            root.knownCatalogRevision = -1
-            root.knownCollectionRevision = -1
-            root.activeOperationId = ""
-            root.retainedOperationIds = []
-            root.backendSessionSerial += 1
-          }
-          if (nextSessionId !== "") root.backendSessionId = nextSessionId
-          root.stateData = result
-          if (root.statusRequestCommand === "details") {
-            var previous = root.details || ({ queue: [], mainQueue: [], views: ({}), operations: [], savedIds: [] })
-            var hasQueue = Object.prototype.hasOwnProperty.call(result, "queue")
-            var hasViews = Object.prototype.hasOwnProperty.call(result, "views")
-            var hasOperations = Object.prototype.hasOwnProperty.call(result, "operations")
-            var hasSaved = Object.prototype.hasOwnProperty.call(result, "savedIds")
-            if (hasQueue || hasViews || hasOperations || hasSaved) {
-              root.details = {
-                queue: hasQueue ? result.queue : previous.queue,
-                mainQueue: hasQueue ? result.mainQueue || [] : previous.mainQueue,
-                views: hasViews ? result.views : previous.views,
-                operations: hasOperations ? result.operations : previous.operations,
-                savedIds: hasSaved ? result.savedIds : previous.savedIds
-              }
-            }
-            if (hasSaved)
-              root.knownCollectionRevision = Number(result.collectionRevision)
-            if (hasQueue)
-              root.knownQueueRevision = Number(result.queueRevision)
-            if (hasViews && hasOperations)
-              root.knownCatalogRevision = Number(result.catalogRevision)
-          }
-          root.statusError = ""
-          successful = true
-        } catch (error) {
-          root.statusError = String(error.message || L.tr("Некорректный ответ OmaTube"))
+  function receiveState(text) {
+    try {
+      var envelope = JSON.parse(text || "{}")
+      if (!envelope.ok || envelope.event !== "state")
+        throw new Error(envelope.error ? L.tb(envelope.error.message) : L.tr("Ошибка backend"))
+      var result = envelope.result || ({})
+      var nextSessionId = String(result.backendSessionId || "")
+      if (nextSessionId !== "" && backendSessionId !== "" && nextSessionId !== backendSessionId) {
+        knownQueueRevision = -1
+        knownCatalogRevision = -1
+        knownCollectionRevision = -1
+        activeOperationId = ""
+        retainedOperationIds = []
+        seenNoticeId = -1
+        details = ({ queue: [], mainQueue: [], views: ({}), operations: [], savedIds: [] })
+        backendSessionSerial += 1
+      }
+      if (nextSessionId !== "") backendSessionId = nextSessionId
+      var meaningful = stateData.apply(result)
+      var previous = details
+      var hasQueue = Object.prototype.hasOwnProperty.call(result, "queue")
+      var hasMainQueue = Object.prototype.hasOwnProperty.call(result, "mainQueue")
+      var hasViews = Object.prototype.hasOwnProperty.call(result, "views")
+      var hasOperations = Object.prototype.hasOwnProperty.call(result, "operations")
+      var hasSaved = Object.prototype.hasOwnProperty.call(result, "savedIds")
+      if (hasQueue || hasMainQueue || hasViews || hasOperations || hasSaved) {
+        details = {
+          queue: hasQueue ? result.queue : previous.queue,
+          mainQueue: hasMainQueue ? result.mainQueue : previous.mainQueue,
+          views: hasViews ? result.views : previous.views,
+          operations: hasOperations ? result.operations : previous.operations,
+          savedIds: hasSaved ? result.savedIds : previous.savedIds
         }
       }
-      if (successful && repeatRefresh)
-        Qt.callLater(function() { root.refresh(true) })
+      if (hasSaved) knownCollectionRevision = Number(stateData.collectionRevision)
+      if (hasQueue) knownQueueRevision = Number(stateData.queueRevision)
+      if (hasViews) knownCatalogRevision = Number(stateData.catalogRevision)
+      // Compatibility for pages tracking revisions; position has its own notify signal.
+      if (meaningful) root.stateDataChanged()
+      statusError = ""
+    } catch (error) {
+      statusError = String(error.message || L.tr("Некорректный ответ OmaTube"))
     }
+  }
+
+  Socket {
+    id: stateSocket
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/omatube/backend.sock"
+    parser: SplitParser { onRead: data => root.receiveState(data) }
+    onConnectedChanged: {
+      if (connected) {
+        reconnectTimer.stop()
+        root.connectionFailures = 0
+        root.refresh()
+      } else {
+        reconnectTimer.restart()
+      }
+    }
+    onError: {
+      root.statusError = L.tr("Фоновый сервис OmaTube недоступен")
+      if (!reconnectTimer.running) reconnectTimer.start()
+    }
+  }
+  Timer {
+    id: reconnectTimer
+    interval: Math.min(30000, 1000 * Math.pow(2, Math.min(5, root.connectionFailures)))
+    onTriggered: { root.connectionFailures += 1; stateSocket.connected = true }
   }
 
   Component {
@@ -532,24 +534,30 @@ Item {
   }
 
   Timer {
-    interval: root.opened || root.playing || root.busy ? 500 : 3000
-    running: true
-    repeat: true
-    triggeredOnStart: true
-    onTriggered: root.refresh(false)
-  }
-  Timer {
     interval: 1000
     running: root.busy
     repeat: true
     onTriggered: root.busySeconds += 1
   }
 
-  Loader {
+  RetainedLoader {
     id: panelLoader
-    active: true
+    objectName: "panelLoader"
+    needed: root.opened || (requested && root.busy)
+    unloadAfter: 10 * 60 * 1000
     visible: false
     source: Qt.resolvedUrl("Panel.qml")
-    onLoaded: { root.injectPanel(); Qt.callLater(root.injectPanel) }
+    onLoaded: {
+      root.injectPanel()
+      if (root.panelOpenPending) { root.panelOpenPending = false; item.open() }
+      Qt.callLater(root.injectPanel)
+    }
+    onReleased: {
+      root.details = ({ queue: [], mainQueue: [], views: ({}), operations: [], savedIds: [] })
+      root.retainedOperationIds = []
+      root.activeOperationId = ""
+      root.subscriptionFullNeeded = true
+      root.refresh()
+    }
   }
 }

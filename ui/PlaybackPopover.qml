@@ -88,6 +88,7 @@ Popup {
   }
 
   component Section: Text {
+    textFormat: Text.PlainText
     color: root.muted
     font.family: root.fontFamily
     font.pixelSize: Style.space(10)
@@ -123,7 +124,7 @@ Popup {
               anchors.centerIn: parent
               spacing: Style.space(6)
               Icon { anchors.verticalCenter: parent.verticalCenter; name: modelData.icon; size: Style.space(13); color: on ? Color.accent : root.muted }
-              Text { anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: on ? root.foreground : root.muted; font.family: root.fontFamily; font.pixelSize: Style.space(11); font.bold: on }
+              Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.label; color: on ? root.foreground : root.muted; font.family: root.fontFamily; font.pixelSize: Style.space(11); font.bold: on }
             }
             MouseArea {
               id: modeMouse
@@ -178,7 +179,7 @@ Popup {
             width: (parent.width - parent.spacing * 5) / 6
             height: parent.height
             color: on ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, .18) : (speedMouse.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05) : "transparent")
-            Text { anchors.centerIn: parent; text: root.speedLabel(modelData); color: on ? root.foreground : root.muted; font.family: root.fontFamily; font.pixelSize: Style.space(11); font.bold: on }
+            Text { anchors.centerIn: parent; textFormat: Text.PlainText; text: root.speedLabel(modelData); color: on ? root.foreground : root.muted; font.family: root.fontFamily; font.pixelSize: Style.space(11); font.bold: on }
             MouseArea { id: speedMouse; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.request("speed", { value: modelData }) }
           }
         }

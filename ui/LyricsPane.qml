@@ -109,6 +109,7 @@ Item {
         width: parent.width - Style.space(40)
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
         text: !root.media.videoId ? L.tr("Включите трек, чтобы увидеть текст")
           : (root.loading ? L.tr("Ищем текст…")
           : (root.lyrics && root.lyrics.error === "network" ? L.tr("Нет связи с LRCLIB") : L.tr("Текст для этого трека не найден")))
@@ -126,6 +127,7 @@ Item {
       Text {
         width: parent.width - offsetControls.width
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.synced ? L.tr("Источник: LRCLIB · клик по строке — перемотка") : L.tr("Источник: LRCLIB · без синхронизации")
         color: root.dim
         font.family: root.fontFamily
@@ -147,6 +149,7 @@ Item {
           width: Style.space(54)
           anchors.verticalCenter: parent.verticalCenter
           horizontalAlignment: Text.AlignHCenter
+          textFormat: Text.PlainText
           text: (root.offset > 0 ? "+" : "") + root.offset.toFixed(1) + L.tr(" с")
           color: root.foreground
           font.family: root.fontFamily

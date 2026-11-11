@@ -1,7 +1,9 @@
 import asyncio
+import json
 import os
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -85,6 +87,46 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
         self.environment.stop()
         self.temporary.cleanup()
 
+    async def test_socket_subscriptions_and_legacy_status_share_the_endpoint(self):
+        self.backend.server = await asyncio.start_unix_server(self.backend.handle, self.backend.socket_path)
+        reader, writer = await asyncio.open_unix_connection(self.backend.socket_path)
+        writer.write(b'{"command":"subscribe"}\n')
+        await writer.drain()
+        first = json.loads(await asyncio.wait_for(reader.readline(), 1))
+        self.assertTrue(first["reset"])
+        self.assertEqual(first["result"]["state"], "idle")
+        self.backend.player.position = 17
+        self.backend._changed()
+        delta = json.loads(await asyncio.wait_for(reader.readline(), 1))
+        self.assertEqual(delta["result"], {"position": 17})
+        cli_reader, cli_writer = await asyncio.open_unix_connection(self.backend.socket_path)
+        cli_writer.write(b'{"command":"status"}\n')
+        await cli_writer.drain()
+        status = json.loads(await asyncio.wait_for(cli_reader.readline(), 1))
+        self.assertTrue(status["ok"])
+        self.assertEqual(status["result"]["position"], 17)
+        self.assertEqual(await cli_reader.readline(), b"")
+        cli_writer.close()
+        await cli_writer.wait_closed()
+        writer.close()
+        await writer.wait_closed()
+
+    async def test_inactive_views_expire_and_obey_a_byte_budget(self):
+        for index in range(3):
+            view_id = f"v{index}"
+            self.backend.views[view_id] = {"viewId": view_id, "items": ["x" * 150]}
+            self.backend.operations[str(index)] = self.terminal_record(str(index), view_id)
+        self.backend.retained_operation_ids = ("0",)
+        with patch("backend.main.MAX_VIEW_CACHE_BYTES", 420):
+            self.backend._prune_operations()
+        self.assertIn("v0", self.backend.views)
+        self.assertLessEqual(len(self.backend.views), 2)
+        self.backend.retained_operation_ids = ()
+        for record in self.backend.operations.values():
+            record["finishedAt"] = time.time() - 3601
+        self.backend._prune_operations()
+        self.assertEqual(self.backend.views, {})
+
     @staticmethod
     def terminal_record(operation_id: str, view_id: str) -> dict:
         return {
@@ -93,7 +135,7 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
             "request": {},
             "state": "done",
             "startedAt": 1.0,
-            "finishedAt": 2.0,
+            "finishedAt": time.time(),
             "processed": 0,
             "result": {"viewId": view_id},
             "error": None,

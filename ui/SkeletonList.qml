@@ -66,6 +66,7 @@ Column {
         color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .045)
         rotation: 8
         SequentialAnimation on x {
+          running: shimmer.visible && shimmer.Window.window !== null && shimmer.Window.window.visible
           loops: Animation.Infinite
           PauseAnimation { duration: skeletonRow.index * 55 }
           NumberAnimation {

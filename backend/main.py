@@ -17,11 +17,13 @@ from .net import HttpClient, ImageCache, ImageServer
 from . import feed as feed_module, sponsorblock as sponsorblock_module, lyrics as lyrics_module
 from .catalog import CatalogBridge
 from .errors import OmaTubeError
+from .events import StateEvents
 from .mpris import MprisBridge
 from .mpv import MpvController
 from .player import Player
 from .resolver import MediaResolver, VIDEO_QUALITIES
 from .storage import Storage
+from .tools import TRUSTED_PATH
 from .downloads import DownloadManager
 from .feed import FeedService
 from .lyrics import LyricsService
@@ -30,6 +32,7 @@ from .urls import normalize_youtube_url
 
 MAX_REQUEST = 64 * 1024
 MAX_RESPONSE = 8 * 1024 * 1024
+MAX_VIEW_CACHE_BYTES = 32 * 1024 * 1024
 DEFAULT_PREFERENCES = {
     "showCover": True, "showAuthor": True, "showTitle": True, "showControls": True,
     "showProgress": True, "textWidth": 220, "marquee": False, "historyEnabled": True,
@@ -97,10 +100,14 @@ class Backend:
         self.catalog_revision = 0
         self.collection_revision = 0
         self.views: dict[str, dict[str, Any]] = {}
+        self._view_sizes: dict[str, int] = {}
+        self._view_sizes_revision = -1
         self.operations: dict[str, dict[str, Any]] = {}
         self.retained_operation_ids: tuple[str, ...] = ()
+        self.events = StateEvents(self._stream_state)
         self.maintenance_tasks: set[asyncio.Task[None]] = set()
         self.catalog_warm_task: asyncio.Task[Any] | None = None
+        self.cache_task: asyncio.Task[None] | None = None
         self.mpv = MpvController(self.runtime / "mpv.sock", self._mpv_event, proxy=proxy)
         self.player = Player(
             self.storage,
@@ -145,6 +152,7 @@ class Backend:
     async def _mpv_event(self, event: dict[str, Any]) -> None: await self.player.handle_mpv_event(event)
 
     def _changed(self) -> None:
+        self.events.notify()
         if self.mpris:
             try: self.mpris.notify()
             except Exception: pass
@@ -152,6 +160,18 @@ class Backend:
     def _collection_changed(self) -> None:
         self.collection_revision += 1
         self._changed()
+
+    def _stream_state(self, options: dict, known: dict) -> dict:
+        self._refresh_stream_retention()
+        if options["details"]:
+            return self.details({"knownRevisions": known})
+        return self.status()
+
+    def _refresh_stream_retention(self) -> None:
+        if self.events.was_used and self.retained_operation_ids != self.events.retained_ids:
+            self.retained_operation_ids = self.events.retained_ids
+            self._prune_operations()
+            self.events.notify()
 
     def status(self) -> dict[str, Any]:
         return {
@@ -218,7 +238,23 @@ class Backend:
             for operation_id, record in self.operations.items()
             if record.get("state") != "running" and operation_id not in retained
         ]
-        keep = retained | running | set(other_terminal[-32:])
+        # Inactive views may be large even when the operation count is small.
+        now = time.time()
+        terminal = [operation_id for operation_id in other_terminal[-32:]
+                    if now - (self.operations[operation_id].get("finishedAt") or now) < 3600]
+        if self._view_sizes_revision != self.catalog_revision:
+            self._view_sizes = {view_id: len(json.dumps(view, ensure_ascii=False).encode())
+                                for view_id, view in self.views.items()}
+            self._view_sizes_revision = self.catalog_revision
+        sizes = self._view_sizes
+        def view_ids(ids):
+            return {result["viewId"] for operation_id in ids
+                    if isinstance(result := self.operations[operation_id].get("result"), dict)
+                    and isinstance(result.get("viewId"), str)}
+        protected = view_ids(retained | running)
+        while terminal and sum(sizes.get(view_id, 0) for view_id in protected | view_ids(terminal)) > MAX_VIEW_CACHE_BYTES:
+            terminal.pop(0)
+        keep = retained | running | set(terminal)
         removed_operations = [
             operation_id
             for operation_id in self.operations
@@ -339,6 +375,7 @@ class Backend:
             "error": None,
         }
         self.operations[operation_id] = record; self.catalog_revision += 1
+        self._changed()
         async def execute() -> None:
             try:
                 result = await runner()
@@ -899,6 +936,7 @@ class Backend:
                 raise OmaTubeError("invalid_request", "Некорректное качество видео")
             return await self._set_video_quality(value)
         self.preferences[key] = value; self._save_preferences()
+        self._changed()
         if key == "historyEnabled": self.player.history_enabled = value
         if key in {"normalize", "skipSilence"}:
             await self.player.set_audio_options(self.preferences["normalize"], self.preferences["skipSilence"])
@@ -906,19 +944,43 @@ class Backend:
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
-            line = await reader.readline()
-            if not line or len(line) > MAX_REQUEST: raise OmaTubeError("invalid_request", "Запрос превышает допустимый размер")
-            try: request = json.loads(line)
-            except json.JSONDecodeError as exc: raise OmaTubeError("invalid_request", "Некорректный JSON") from exc
-            if not isinstance(request, dict): raise OmaTubeError("invalid_request", "Запрос должен быть объектом")
-            result = await self.command(request); response = {"ok": True, "result": result}
-        except OmaTubeError as error: response = {"ok": False, "error": error.as_dict()}
-        except Exception:
-            traceback.print_exc()
-            response = {"ok": False, "error": {"code": "storage_error", "message": "Внутренняя ошибка backend"}}
-        payload = json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
-        if len(payload) > MAX_RESPONSE: payload = b'{"ok":false,"error":{"code":"provider_error","message":"Response too large"}}\n'
-        writer.write(payload); await writer.drain(); writer.close(); await writer.wait_closed()
+            try:
+                line = await reader.readline()
+                if not line or len(line) > MAX_REQUEST:
+                    raise OmaTubeError("invalid_request", "Запрос превышает допустимый размер")
+                try:
+                    request = json.loads(line)
+                except (ValueError, UnicodeDecodeError) as exc:
+                    raise OmaTubeError("invalid_request", "Некорректный JSON") from exc
+                if not isinstance(request, dict):
+                    raise OmaTubeError("invalid_request", "Запрос должен быть объектом")
+                if request.get("command") == "subscribe":
+                    await self.events.serve(reader, writer, request)
+                    return
+                result = await self.command(request)
+                response = {"ok": True, "result": result}
+                if request.get("command") not in {"status", "details"}:
+                    self._changed()
+            except OmaTubeError as error:
+                response = {"ok": False, "error": error.as_dict()}
+            except (ConnectionError, OSError):
+                return
+            except Exception:
+                traceback.print_exc()
+                response = {"ok": False, "error": {"code": "storage_error", "message": "Внутренняя ошибка backend"}}
+            payload = json.dumps(response, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+            if len(payload) > MAX_RESPONSE:
+                payload = b'{"ok":false,"error":{"code":"provider_error","message":"Response too large"}}\n'
+            writer.write(payload)
+            await asyncio.wait_for(writer.drain(), 5)
+        except (ConnectionError, OSError, TimeoutError):
+            pass
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
 
     async def start(self) -> None:
         self.socket_path.unlink(missing_ok=True)
@@ -929,6 +991,19 @@ class Backend:
         self.catalog_warm_task = asyncio.create_task(self._warm_catalog())
         self._background(self._warm_network())
         self.feed_task = asyncio.create_task(self._feed_loop())
+        self.cache_task = asyncio.create_task(self._cache_loop())
+
+    async def _cache_loop(self) -> None:
+        while True:
+            await asyncio.sleep(60)
+            self.http.prune_cache()
+            self.lyrics_service._cache.prune()
+            self.resolver._cache.prune()
+            self._refresh_stream_retention()
+            previous = self.catalog_revision
+            self._prune_operations()
+            if previous != self.catalog_revision:
+                self.events.notify()
 
     async def _warm_network(self) -> None:
         # Open TLS connections and start the idle mpv process before the first click needs them.
@@ -945,6 +1020,10 @@ class Backend:
             pass
 
     async def stop(self) -> None:
+        await self.events.stop()
+        if self.cache_task:
+            self.cache_task.cancel()
+            await asyncio.gather(self.cache_task, return_exceptions=True)
         await self.image_server.stop()
         operation_tasks = [
             task
@@ -984,6 +1063,7 @@ async def async_main() -> None:
 
 
 def main() -> None:
+    os.environ["PATH"] = TRUSTED_PATH
     try: asyncio.run(async_main())
     except OmaTubeError as error: raise SystemExit(f"{error.code}: {error.message}")
 

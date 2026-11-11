@@ -170,7 +170,7 @@ Item {
       color: Color.accent
       opacity: .8
       NumberAnimation on x {
-        running: loadingStripe.visible
+        running: loadingStripe.visible && loadingStripe.Window.window !== null && loadingStripe.Window.window.visible
         loops: Animation.Infinite
         from: -loadingStripe.width
         to: track.width
@@ -316,6 +316,7 @@ Item {
           spacing: Style.space(7)
           Text {
             id: previewTime
+            textFormat: Text.PlainText
             text: root.formatTime(root.previewSeconds)
             color: root.foreground
             font.family: root.fontFamily
@@ -324,6 +325,7 @@ Item {
           }
           Text {
             anchors.baseline: previewTime.baseline
+            textFormat: Text.PlainText
             text: root.formatDelta(root.previewSeconds - (root.dragging ? root.dragOrigin : root.livePosition))
             color: Color.accent
             font.family: root.fontFamily
@@ -379,6 +381,7 @@ Item {
         Icon { anchors.verticalCenter: parent.verticalCenter; name: "skip-forward"; size: Style.space(12); color: upcomingTag.tone }
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: root.upcoming ? (root.categoryLabels[root.upcoming.category] || L.tr("Сегмент")) + L.tr(" через ")
             + Math.max(1, Math.ceil(Number(root.upcoming.start) - root.livePosition)) + L.tr(" с") : ""
           color: root.foreground
@@ -387,6 +390,7 @@ Item {
         }
         Text {
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: L.tr("НЕ ПРОПУСКАТЬ")
           color: Color.accent
           font.family: root.fontFamily

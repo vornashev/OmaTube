@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from .auth import secure_cookie_file
+from .cache import ByteTTLCache
 from .errors import OmaTubeError
 from .net import NetStats
+from .tools import system_tool
 from .urls import canonical_video_url
 
 MAX_OUTPUT = 8 * 1024 * 1024
@@ -92,7 +94,7 @@ class MediaResolver:
         self.hedge_delays = (3.0, 3.0, 3.0, 0.0)
         self.cache_ttl = 1200.0
         self.stats = NetStats(slow_seconds=8.0)
-        self._cache: dict[tuple[str, int], tuple[float, ResolvedMedia]] = {}
+        self._cache = ByteTTLCache(16 * 1024 * 1024, 64, self.cache_ttl)
         self._inflight: dict[tuple[str, int], asyncio.Task[ResolvedMedia]] = {}
         self._prefetched: set[asyncio.Task[ResolvedMedia]] = set()
     @staticmethod
@@ -140,9 +142,8 @@ class MediaResolver:
         if self._inflight.get(key) is task:
             self._inflight.pop(key, None)
         if not task.cancelled() and task.exception() is None:
-            if len(self._cache) >= 64:
-                self._cache.pop(next(iter(self._cache)))
-            self._cache[key] = (time.monotonic(), task.result())
+            result = task.result()
+            self._cache.put(key, (time.monotonic(), result), len(repr(result).encode()))
 
     def prefetch(self, video_id: str) -> None:
         key = (video_id, self.max_video_height)
@@ -211,7 +212,7 @@ class MediaResolver:
             # Print only the fields we read: the full dump can exceed MAX_OUTPUT
             # because automatic_captions lists every auto-translated language.
             self.python, "-m", "yt_dlp", "--ignore-config", "--print", RESOLVE_FIELDS, "--print", STORYBOARD_FIELDS,
-            "--skip-download", "--no-playlist", "--js-runtimes", "deno",
+            "--skip-download", "--no-playlist", "--js-runtimes", f"deno:{system_tool('deno')}",
             "--socket-timeout", "8", "--extractor-retries", "3",
             *(["--extractor-args", "youtube:skip=hls"] if skip_hls else []),
             "-f", (

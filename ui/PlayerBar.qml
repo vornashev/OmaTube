@@ -133,7 +133,7 @@ Item {
         name: root.loading ? "loader-circle" : (root.playState === "playing" ? "pause" : "play")
         size: Style.space(18)
         color: Color.accent
-        NumberAnimation on rotation { running: root.loading; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+        NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.loading; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
       }
       MouseArea {
         id: playMouse
@@ -194,6 +194,7 @@ Item {
     anchors.left: transport.right
     anchors.leftMargin: Style.space(28)
     anchors.verticalCenter: parent.verticalCenter
+    textFormat: Text.PlainText
     text: seek.formatTime(root.loading ? 0 : seek.position)
     color: root.dim
     font.family: root.fontFamily
@@ -219,6 +220,7 @@ Item {
     anchors.right: tools.left
     anchors.rightMargin: Style.space(20)
     anchors.verticalCenter: parent.verticalCenter
+    textFormat: Text.PlainText
     text: seek.formatTime(root.duration)
     color: root.dim
     font.family: root.fontFamily

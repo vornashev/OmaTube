@@ -82,6 +82,7 @@ Item {
           id: posLabel
           anchors.left: parent.left
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: root.formatTime(root.position)
           color: root.dim
           font.family: root.fontFamily
@@ -91,6 +92,7 @@ Item {
           id: durLabel
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: root.formatTime(root.duration)
           color: root.dim
           font.family: root.fontFamily
@@ -142,6 +144,7 @@ Item {
       height: parent.height
       spacing: Style.space(6)
       Text {
+        textFormat: Text.PlainText
         text: L.tr("ДАЛЕЕ") + (root.queue.length > 0 ? "  ·  " + root.queue.length : "")
         color: root.dim
         font.family: root.fontFamily

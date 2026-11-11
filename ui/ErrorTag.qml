@@ -41,6 +41,7 @@ Item {
     Icon { anchors.verticalCenter: parent.verticalCenter; name: "circle-alert"; size: Style.space(12); color: Color.urgent }
     Text {
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: L.tr("НЕ ОБНОВЛЕНО")
       color: Color.urgent
       font.family: root.fontFamily
@@ -106,7 +107,7 @@ Item {
           text: L.tr("КОПИРОВАТЬ")
           foreground: root.foreground
           fontFamily: root.fontFamily
-          onClicked: Quickshell.execDetached(["wl-copy", root.title + ": " + root.message])
+          onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", root.title + ": " + root.message])
         }
         Pill {
           height: Style.space(26)

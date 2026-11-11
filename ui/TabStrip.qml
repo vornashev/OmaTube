@@ -56,6 +56,7 @@ Item {
           Text {
             id: label
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: modelData.label
             color: chosen ? root.foreground : root.dim
             font.family: root.fontFamily

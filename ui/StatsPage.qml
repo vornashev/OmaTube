@@ -83,6 +83,7 @@ Item {
     Text {
       id: headLabel
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: parent.label
       color: root.dim
       font.family: root.fontFamily
@@ -99,6 +100,7 @@ Item {
     Text {
       id: headNote
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: parent.note
       color: Color.accent
       font.family: root.fontFamily
@@ -125,6 +127,7 @@ Item {
         Text {
           width: Style.space(12)
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: String(index + 1)
           color: root.dim
           font.family: root.fontFamily
@@ -155,6 +158,7 @@ Item {
           width: Style.space(88)
           anchors.verticalCenter: parent.verticalCenter
           horizontalAlignment: Text.AlignRight
+          textFormat: Text.PlainText
           text: board.byTime ? root.duration(modelData.seconds) : modelData.plays + " " + root.plural(modelData.plays, L.tr("раз"), L.tr("раза"), L.tr("раз"))
           color: root.dim
           font.family: root.fontFamily
@@ -164,6 +168,7 @@ Item {
     }
     Text {
       visible: board.rows.length === 0
+      textFormat: Text.PlainText
       text: L.tr("Пока нет данных")
       color: root.dim
       font.family: root.fontFamily
@@ -195,6 +200,7 @@ Item {
           width: root.compact ? parent.width : parent.width - periodControl.width - parent.spacing
           spacing: Style.space(3)
           Text {
+            textFormat: Text.PlainText
             text: L.tr("Статистика")
             color: root.foreground
             font.family: root.fontFamily
@@ -203,6 +209,7 @@ Item {
           }
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: L.tr("данные хранятся только на этом компьютере")
             color: root.dim
             font.family: root.fontFamily
@@ -239,6 +246,7 @@ Item {
             spacing: Style.space(5)
             Text {
               width: parent.width
+              textFormat: Text.PlainText
               text: modelData.label
               color: root.dim
               font.family: root.fontFamily
@@ -249,6 +257,7 @@ Item {
             }
             Text {
               width: parent.width
+              textFormat: Text.PlainText
               text: modelData.value
               color: modelData.accent === true ? Color.accent : root.foreground
               font.family: root.fontFamily
@@ -258,6 +267,7 @@ Item {
             }
             Text {
               width: parent.width
+              textFormat: Text.PlainText
               text: modelData.note
               color: root.dim
               font.family: root.fontFamily
@@ -295,6 +305,7 @@ Item {
                   anchors.bottom: bar.top
                   anchors.bottomMargin: Style.space(4)
                   visible: modelData.seconds > 0
+                  textFormat: Text.PlainText
                   text: root.hours(modelData.seconds)
                   color: index === root.peak ? root.foreground : root.dim
                   font.family: root.fontFamily
@@ -311,6 +322,7 @@ Item {
               Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText
                 text: L.tb(modelData.label).toUpperCase()
                 color: root.dim
                 font.family: root.fontFamily

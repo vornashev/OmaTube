@@ -10,6 +10,7 @@ import time
 
 from .errors import OmaTubeError
 from .net import NetStats
+from .tools import system_tool
 
 MAX_LINE = 8 * 1024 * 1024
 RETRY_DELAYS = (0.6, 1.2, 2.4)
@@ -17,9 +18,9 @@ RETRY_DELAYS = (0.6, 1.2, 2.4)
 
 
 class CatalogBridge:
-    def __init__(self, worker: Path, node: str = "node", proxy: str | None = None) -> None:
+    def __init__(self, worker: Path, node: str | None = None, proxy: str | None = None) -> None:
         self.worker = worker
-        self.node = node
+        self.node = node or system_tool("node")
         self.proxy = proxy
         self.stats = NetStats()
         self.process: asyncio.subprocess.Process | None = None

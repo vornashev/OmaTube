@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
+from .cache import ByteTTLCache
 
 API = "https://lrclib.net/api"
 MAX_RESPONSE = 256 * 1024
@@ -65,12 +66,13 @@ class LyricsService:
     def __init__(self, timeout: float = 4.0, fetcher=None) -> None:
         self.timeout = timeout
         self._fetcher = fetcher or _request
-        self._cache: dict[tuple[str, str, int], dict[str, Any]] = {}
+        self._cache = ByteTTLCache(4 * 1024 * 1024, 64, 3600)
 
     async def lookup(self, title: str, author: str, duration: float | None) -> dict[str, Any]:
         artist, track = clean_title(title, author)
         key = (artist.lower(), track.lower(), int(duration or 0))
-        if key in self._cache: return self._cache[key]
+        cached = self._cache.get(key)
+        if cached is not None: return cached
         base = {"artist_name": artist, "track_name": track}
         if duration: base["duration"] = str(int(duration))
         found = None
@@ -88,6 +90,5 @@ class LyricsService:
             plain = [{"t": None, "text": line} for line in (found.get("plainLyrics") or "").splitlines()] if not synced else []
             result = {"found": True, "synced": bool(synced), "lines": synced or plain, "source": "LRCLIB",
                       "artist": found.get("artistName"), "track": found.get("trackName")}
-        if len(self._cache) >= 64: self._cache.pop(next(iter(self._cache)))
-        self._cache[key] = result
+        self._cache.put(key, result, len(json.dumps(result, ensure_ascii=False).encode()))
         return result

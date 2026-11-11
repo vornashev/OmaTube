@@ -87,6 +87,7 @@ Item {
           width: parent.width - refreshButton.width - parent.spacing
           spacing: Style.space(3)
           Text {
+            textFormat: Text.PlainText
             text: L.tr("Главная")
             color: root.foreground
             font.family: root.fontFamily
@@ -95,6 +96,7 @@ Item {
           }
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: L.tr("подобрано по истории и подпискам")
             color: root.dim
             font.family: root.fontFamily
@@ -132,6 +134,7 @@ Item {
             Text {
               id: sectionLabel
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: modelData.label
               color: root.dim
               font.family: root.fontFamily
@@ -148,6 +151,7 @@ Item {
             Text {
               id: sectionLink
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: modelData.link
               color: Color.accent
               font.family: root.fontFamily
@@ -192,6 +196,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         topPadding: Style.space(60)
+        textFormat: Text.PlainText
         text: root.embedded ? L.tr("Здесь появятся недосмотренные видео, новинки подписок и рекомендации по вашей истории.")
           : L.tr("Здесь появятся недосмотренные видео, новинки подписок и рекомендации по вашей истории. Найдите что-нибудь через поиск.")
         color: root.dim

@@ -51,6 +51,7 @@ Item {
       Icon { anchors.verticalCenter: parent.verticalCenter; name: "tv-minimal-play"; size: Style.space(22); color: Color.accent }
       Text {
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: "OMATUBE"
         color: root.foreground
         font.family: root.fontFamily
@@ -90,6 +91,7 @@ Item {
             Text {
               visible: !done
               anchors.centerIn: parent
+              textFormat: Text.PlainText
               text: String(modelData.n)
               color: current ? Color.accent : root.dim
               font.family: root.fontFamily
@@ -99,6 +101,7 @@ Item {
           }
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: modelData.label
             color: done || current ? root.foreground : root.dim
             font.family: root.fontFamily
@@ -127,6 +130,7 @@ Item {
           spacing: Style.space(6)
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: root.step === 2 ? L.tr("Подключить аккаунт YouTube?") : L.tr("Выберите формат панели")
             color: root.foreground
             font.family: root.fontFamily
@@ -135,6 +139,7 @@ Item {
           }
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: root.step === 2 ? L.tr("Нужно для подписок, лайков и «Смотреть позже». Без аккаунта работают поиск и воспроизведение.")
               : L.tr("Формат можно сменить в любой момент в настройках.")
             color: root.dim
@@ -176,7 +181,7 @@ Item {
                 spacing: Style.space(3)
                 Row {
                   spacing: Style.space(8)
-                  Text { text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(13); font.bold: true }
+                  Text { textFormat: Text.PlainText; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(13); font.bold: true }
                   Rectangle {
                     visible: modelData.badge !== undefined
                     anchors.verticalCenter: parent.verticalCenter
@@ -185,11 +190,12 @@ Item {
                     color: "transparent"
                     border.width: Math.max(1, Style.space(1))
                     border.color: Color.accent
-                    Text { id: badgeText; anchors.centerIn: parent; text: modelData.badge || ""; color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.space(8); font.bold: true; font.letterSpacing: .8 }
+                    Text { id: badgeText; anchors.centerIn: parent; textFormat: Text.PlainText; text: modelData.badge || ""; color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.space(8); font.bold: true; font.letterSpacing: .8 }
                   }
                 }
                 Text {
                   width: parent.width
+                  textFormat: Text.PlainText
                   text: modelData.description
                   color: root.dim
                   font.family: root.fontFamily
@@ -231,8 +237,8 @@ Item {
               Column {
                 anchors.centerIn: parent
                 spacing: Style.space(4)
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); font.bold: chosen }
-                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.size; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; textFormat: Text.PlainText; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); font.bold: chosen }
+                Text { anchors.horizontalCenter: parent.horizontalCenter; textFormat: Text.PlainText; text: modelData.size; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
               }
               MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.format = modelData.value }
             }
@@ -273,6 +279,7 @@ Item {
 
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
+      textFormat: Text.PlainText
       text: L.tr("Пропустить настройку")
       color: root.dim
       font.family: root.fontFamily

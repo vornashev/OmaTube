@@ -3,17 +3,23 @@ import { Innertube, UniversalCache, Log } from 'youtubei.js';
 import { randomUUID } from 'node:crypto';
 import readline from 'node:readline';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { BoundedCache, estimateBytes } from './cache.mjs';
 Log.setLevel(Log.Level.ERROR);
 
 const MAX_LINE = 8 * 1024 * 1024;
 const CURSOR_TTL_MS = 15 * 60 * 1000;
 const MAX_IDLE_CURSORS = 32;
-const cursors = new Map();
+const pageBytes = state => estimateBytes(state.page?.page ?? state.page, 32 * 1024 * 1024);
+const cursors = new BoundedCache({ maxBytes: 16 * 1024 * 1024, maxEntries: MAX_IDLE_CURSORS,
+  ttl: Infinity, pinned: state => Boolean(state.inFlight), sizeOf: pageBytes, keepOversized: true });
 const collector = new AsyncLocalStorage();
-const responseCache = new Map();
 const FRESH_MS = { related: 900e3, search: 180e3, open: 300e3, channel_section: 300e3, comments: 600e3, suggestions: 1800e3 };
 const STALE_MS = 24 * 3600e3;
 const MAX_CACHED = 60;
+const responseCache = new BoundedCache({ maxBytes: 32 * 1024 * 1024, maxEntries: MAX_CACHED,
+  ttl: STALE_MS, expiresAt: entry => entry.at + STALE_MS,
+  sizeOf: entry => estimateBytes({ result: entry.result,
+    pages: entry.snapshots.map(snapshot => snapshot.page?.page ?? snapshot.page) }, 32 * 1024 * 1024) });
 let client;
 let clientPromise;
 
@@ -357,7 +363,8 @@ async function channelSection({ channelId, tab, sort }) {
   return pageResult(section, { source: 'youtube', kind: entry[1], preserveDuplicates: false });
 }
 
-const commentPages = new Map();
+const commentPages = new BoundedCache({ maxBytes: 8 * 1024 * 1024, maxEntries: 16,
+  ttl: CURSOR_TTL_MS, sizeOf: pageBytes, keepOversized: true });
 
 async function comments({ videoId, cursor }) {
   const yt = await ensureClient();
@@ -475,6 +482,7 @@ function publicError(error) {
 }
 
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+setInterval(() => { responseCache.prune(); commentPages.prune(); cursors.prune(); pruneCursors(); }, 60000).unref();
 rl.on('line', async line => {
   if (Buffer.byteLength(line) > MAX_LINE) {
     process.stdout.write(`${JSON.stringify({ id: null, ok: false, error: { code: 'invalid_request', message: 'Ответ превышает допустимый размер' } })}\n`);

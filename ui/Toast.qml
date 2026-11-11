@@ -77,6 +77,7 @@ Rectangle {
       id: actionLabel
       visible: root.toast !== null && String(root.toast.action || "") !== ""
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: root.toast ? String(root.toast.action || "") : ""
       color: Color.accent
       font.family: root.fontFamily

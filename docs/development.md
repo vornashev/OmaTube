@@ -54,6 +54,12 @@ scripts/check.sh   # versions, manifest, icons, CHANGELOG format, shellcheck whe
 
 CI runs the same steps on every push to `main` and on every pull request.
 
+When Qt 6 Quick Test (`qmltestrunner`) is installed, the Python suite also runs headless QML checks at 100% and 200% display scale: hidden animations, first-use panel/page loading, retained scroll state, navigation and cover decoding. Shell services and page bodies are replaced by test fixtures; no running shell or backend is contacted.
+
+QML checks also cover idle view eviction and lists of 1,000 items. When Quickshell is available, a separate native socket test starts an isolated instance with a temporary backend socket; it does not load the desktop shell. Cache tests include Node.js unit tests from `catalog/cache.test.mjs`.
+
+The widget subscribes to `backend.sock` with a newline-delimited JSON request: `{"command":"subscribe","details":false}`. The first `state` event has `reset:true`; later events contain only changed fields in `result`. Sending another subscription request changes the detail level or retained operation IDs; `full:true` requests a new snapshot. Playback updates are coalesced to at most four events per second, and an unchanged idle state sends no frames. Existing one-request CLI connections keep their previous behavior.
+
 ## Translations
 
 UI strings are written in Russian in QML (`L.tr("…")`), and `ui/i18n.js` maps them to English. When you add a string, add its English translation to `ui/i18n.js`. Backend messages live in `backend/i18n.py`.

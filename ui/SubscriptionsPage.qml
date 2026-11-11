@@ -3,6 +3,7 @@ import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 import "i18n.js" as L
+import "GroupedRows.js" as GroupedRows
 
 Item {
   id: root
@@ -136,6 +137,7 @@ Item {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(3)
           Text {
+            textFormat: Text.PlainText
             text: L.tr("Подписки")
             color: root.foreground
             font.family: root.fontFamily
@@ -144,6 +146,7 @@ Item {
           }
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: (root.newCount > 0 ? root.newCount + L.tr(" новых · ") : "") + L.tr("обновлено ") + root.updatedLabel + (root.compact ? "" : L.tr(" · RSS, без авторизации"))
             color: root.dim
             font.family: root.fontFamily
@@ -240,13 +243,17 @@ Item {
         height: Math.max(0, parent.height - y)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        model: root.groups
-        spacing: Style.space(14)
+        model: GroupedRows.flatten(root.groups)
+        spacing: 0
         delegate: Column {
+          id: groupedRow
+          required property int index
+          topPadding: modelData._groupLabel && index > 0 ? Style.space(12) : 0
           required property var modelData
           width: feedList.width - (feedList.contentHeight > feedList.height ? Style.space(8) : 0)
           spacing: Style.space(2)
           Row {
+            visible: modelData._groupLabel !== undefined
             width: parent.width
             height: Style.space(17)
             spacing: Style.space(10)
@@ -254,7 +261,8 @@ Item {
             Text {
               id: groupLabel
               anchors.verticalCenter: parent.verticalCenter
-              text: modelData.label
+              textFormat: Text.PlainText
+              text: modelData._groupLabel || ""
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.space(10)
@@ -268,92 +276,89 @@ Item {
               color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .1)
             }
           }
-          Repeater {
-            model: modelData.items
-            delegate: Item {
-              id: feedRow
-              required property var modelData
-              readonly property bool unseen: modelData.isNew === true
-              width: parent.width
-              height: Style.space(58)
-              HoverHandler { id: rowHover }
+          Item {
+            id: feedRow
+            readonly property var modelData: groupedRow.modelData
+            readonly property bool unseen: modelData.isNew === true
+            width: parent.width
+            height: Style.space(58)
+            HoverHandler { id: rowHover }
+            Rectangle {
+              anchors.fill: parent
+              color: rowHover.hovered ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05) : "transparent"
+            }
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl, media: modelData, placement: "first" })
+            }
+            Row {
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(2)
+              anchors.rightMargin: Style.space(2)
+              spacing: Style.space(14)
               Rectangle {
-                anchors.fill: parent
-                color: rowHover.hovered ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05) : "transparent"
+                width: Style.space(6); height: width; radius: width / 2
+                anchors.verticalCenter: parent.verticalCenter
+                color: feedRow.unseen ? Color.accent : "transparent"
               }
-              MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl, media: modelData, placement: "first" })
-              }
-              Row {
-                anchors.fill: parent
-                anchors.leftMargin: Style.space(2)
-                anchors.rightMargin: Style.space(2)
-                spacing: Style.space(14)
-                Rectangle {
-                  width: Style.space(6); height: width; radius: width / 2
-                  anchors.verticalCenter: parent.verticalCenter
-                  color: feedRow.unseen ? Color.accent : "transparent"
-                }
-                Rectangle {
-                  width: Style.space(root.compact ? 80 : 96)
-                  height: Style.space(root.compact ? 45 : 54)
-                  anchors.verticalCenter: parent.verticalCenter
-                  color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .06)
-                  clip: true
-                  CatalogImage {
-                    anchors.fill: parent
-                    requestedSource: String(modelData.thumbnailUrl || "")
-                    foreground: root.foreground
-                    fontFamily: root.fontFamily
-                    fillMode: Image.PreserveAspectCrop
-                  }
-                }
-                Column {
-                  width: parent.width - Style.space(6) - Style.space(root.compact ? 80 : 96) - rowActions.width - (feedMark.visible ? feedMark.width + parent.spacing : 0) - parent.spacing * 3
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.space(4)
-                  Text {
-                    width: parent.width
-                    textFormat: Text.PlainText
-                    text: String(modelData.title)
-                    color: feedRow.unseen ? root.foreground : root.dim
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.space(13)
-                    font.weight: feedRow.unseen ? Font.DemiBold : Font.Normal
-                    wrapMode: Text.WordWrap
-                    maximumLineCount: 2
-                    elide: Text.ElideRight
-                  }
-                  Text {
-                    width: parent.width
-                    textFormat: Text.PlainText
-                    text: String(modelData.author) + (modelData.viewCount ? " · " + root.formatCount(modelData.viewCount) : "") + " · " + root.ago(modelData.publishedTs)
-                    color: Color.accent
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.space(11)
-                    elide: Text.ElideRight
-                  }
-                }
-                QueueMark {
-                  id: feedMark
-                  anchors.verticalCenter: parent.verticalCenter
-                  logic: root.logic
-                  videoId: String(modelData.videoId || "")
+              Rectangle {
+                width: Style.space(root.compact ? 80 : 96)
+                height: Style.space(root.compact ? 45 : 54)
+                anchors.verticalCenter: parent.verticalCenter
+                color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .06)
+                clip: true
+                CatalogImage {
+                  anchors.fill: parent
+                  requestedSource: String(modelData.thumbnailUrl || "")
                   foreground: root.foreground
                   fontFamily: root.fontFamily
+                  fillMode: Image.PreserveAspectCrop
                 }
-                Row {
-                  id: rowActions
-                  visible: rowHover.hovered
-                  width: visible ? implicitWidth : 0
-                  anchors.verticalCenter: parent.verticalCenter
-                  spacing: Style.space(2)
-                  IconButton { icon: "clock-plus"; iconSize: 14; tooltipText: L.tr("Смотреть позже"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("watch_later", { media: modelData }) }
-                  IconButton { visible: !feedMark.visible; width: visible ? implicitWidth : 0; icon: "list-plus"; iconSize: 14; tooltipText: L.tr("В мою очередь"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("enqueue_url", { url: modelData.canonicalUrl, placement: "end" }) }
-                  IconButton { icon: "play"; iconSize: 14; tooltipText: L.tr("Играть"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl, media: modelData, placement: "first" }) }
+              }
+              Column {
+                width: parent.width - Style.space(6) - Style.space(root.compact ? 80 : 96) - rowActions.width - (feedMark.visible ? feedMark.width + parent.spacing : 0) - parent.spacing * 3
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(4)
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: String(modelData.title)
+                  color: feedRow.unseen ? root.foreground : root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.space(13)
+                  font.weight: feedRow.unseen ? Font.DemiBold : Font.Normal
+                  wrapMode: Text.WordWrap
+                  maximumLineCount: 2
+                  elide: Text.ElideRight
                 }
+                Text {
+                  width: parent.width
+                  textFormat: Text.PlainText
+                  text: String(modelData.author) + (modelData.viewCount ? " · " + root.formatCount(modelData.viewCount) : "") + " · " + root.ago(modelData.publishedTs)
+                  color: Color.accent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.space(11)
+                  elide: Text.ElideRight
+                }
+              }
+              QueueMark {
+                id: feedMark
+                anchors.verticalCenter: parent.verticalCenter
+                logic: root.logic
+                videoId: String(modelData.videoId || "")
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+              }
+              Row {
+                id: rowActions
+                visible: rowHover.hovered
+                width: visible ? implicitWidth : 0
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(2)
+                IconButton { icon: "clock-plus"; iconSize: 14; tooltipText: L.tr("Смотреть позже"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("watch_later", { media: modelData }) }
+                IconButton { visible: !feedMark.visible; width: visible ? implicitWidth : 0; icon: "list-plus"; iconSize: 14; tooltipText: L.tr("В мою очередь"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("enqueue_url", { url: modelData.canonicalUrl, placement: "end" }) }
+                IconButton { icon: "play"; iconSize: 14; tooltipText: L.tr("Играть"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("play_url", { url: modelData.canonicalUrl, media: modelData, placement: "first" }) }
               }
             }
           }
@@ -366,6 +371,7 @@ Item {
           width: parent.width - Style.space(40)
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap
+          textFormat: Text.PlainText
           text: root.channels.length === 0 ? L.tr("Подписок пока нет. Откройте канал и нажмите «Отслеживать».")
             : (root.unseenOnly ? L.tr("Непросмотренных нет") : L.tr("В ленте пока пусто — обновите её позже"))
           color: root.dim
@@ -398,6 +404,7 @@ Item {
           anchors.left: parent.left
           anchors.leftMargin: Style.space(6)
           anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
           text: L.tr("КАНАЛЫ · ") + root.channels.length
           color: root.dim
           font.family: root.fontFamily
@@ -464,6 +471,7 @@ Item {
               Text {
                 id: badgeLabel
                 anchors.centerIn: parent
+                textFormat: Text.PlainText
                 text: String(modelData.newCount)
                 color: Color.accent
                 font.family: root.fontFamily
@@ -485,6 +493,7 @@ Item {
         visible: root.importMessage !== ""
         width: parent.width - Style.space(28)
         height: visible ? implicitHeight : 0
+        textFormat: Text.PlainText
         text: root.importMessage
         wrapMode: Text.WordWrap
         color: root.importFailed ? Color.urgent : root.dim

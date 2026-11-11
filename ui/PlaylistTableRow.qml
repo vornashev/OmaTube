@@ -98,11 +98,12 @@ Item {
         size: Style.space(13)
         color: root.rowState === "error" ? Color.urgent : (root.rowState === "loading" || root.rowState === "paused" ? Color.accent
           : (root.rowState === "played" ? root.dim : root.foreground))
-        NumberAnimation on rotation { running: root.rowState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+        NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.rowState === "loading"; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
       }
       Text {
         visible: parent.glyph === "" && root.rowState !== "playing"
         anchors.centerIn: parent
+        textFormat: Text.PlainText
         text: String(root.rowNumber)
         color: root.dim
         font.family: root.fontFamily
@@ -151,6 +152,7 @@ Item {
           Text {
             id: stateLabel
             visible: root.rowState === "loading" || root.rowState === "error"
+            textFormat: Text.PlainText
             text: root.rowState === "loading" ? L.tr("·  загрузка…") : L.tr("·  не удалось открыть")
             color: root.rowState === "error" ? Color.urgent : root.foreground
             font.family: root.fontFamily
@@ -186,6 +188,7 @@ Item {
       visible: !root.compact
       width: visible ? Style.space(80) : 0
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: root.formatCount(root.media.viewCount)
       color: root.dim
       opacity: root.rowState === "played" ? .7 : 1
@@ -196,6 +199,7 @@ Item {
       visible: !root.compact
       width: visible ? Style.space(60) : 0
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: root.formatCount(root.media.likeCount)
       color: root.dim
       opacity: root.rowState === "played" ? .7 : 1
@@ -209,6 +213,7 @@ Item {
         visible: root.rowState !== "loading"
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.active && root.positionText !== "" ? root.positionText : root.formatDuration(root.media.duration)
         color: root.rowState === "playing" ? Color.accent : root.dim
         opacity: root.rowState === "played" ? .7 : 1

@@ -37,6 +37,7 @@ Rectangle {
         Text {
           id: label
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: modelData.label
           color: on ? root.foreground : root.dim
           font.family: root.fontFamily

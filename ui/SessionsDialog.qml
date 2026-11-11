@@ -84,6 +84,7 @@ Popup {
         anchors.verticalCenter: parent.verticalCenter
         spacing: Style.space(3)
         Text {
+          textFormat: Text.PlainText
           text: L.tr("Сессии очереди")
           color: root.foreground
           font.family: root.fontFamily
@@ -92,6 +93,7 @@ Popup {
         }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: L.tr("сохранённые очереди · восстановление одним кликом")
           color: root.muted
           font.family: root.fontFamily
@@ -117,6 +119,7 @@ Popup {
       Text {
         id: listLabel
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: L.tr("СОХРАНЁННЫЕ · ") + root.sessions.length
         color: root.muted
         font.family: root.fontFamily
@@ -179,6 +182,7 @@ Popup {
             }
             Text {
               width: parent.width
+              textFormat: Text.PlainText
               text: root.describe(row.modelData)
               color: root.muted
               font.family: root.fontFamily
@@ -206,6 +210,7 @@ Popup {
         width: parent.width - Style.space(20)
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
         text: L.tr("Сессий пока нет. Сохраните текущую очередь, чтобы вернуться к ней позже.")
         color: root.muted
         font.family: root.fontFamily
@@ -245,6 +250,7 @@ Popup {
               visible: nameField.text === ""
               anchors.fill: parent
               verticalAlignment: Text.AlignVCenter
+              textFormat: Text.PlainText
               text: L.tr("Название сессии…")
               color: root.muted
               font: nameField.font

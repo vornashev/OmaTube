@@ -51,6 +51,12 @@ Item {
   readonly property int columns: Math.max(2, Math.floor((contentWidth + Style.space(16)) / Style.space(216)))
   readonly property real cardWidth: Math.floor((contentWidth - Style.space(16) * (columns - 1)) / columns)
   readonly property string channelId: String(entity.id || "")
+  property bool cardsReady: false
+  function enableCards() { cardsReady = true }
+  function prepareCards() { cardsReady = false; Qt.callLater(enableCards) }
+  onRowsChanged: prepareCards()
+  onColumnsChanged: prepareCards()
+  Component.onCompleted: prepareCards()
 
   onViewChanged: { overrideActive = false; sectionLoading = false }
   onChannelIdChanged: { sort = "Latest"; tab = initialTab }
@@ -121,6 +127,7 @@ Item {
             Icon { anchors.verticalCenter: parent.verticalCenter; name: "arrow-left"; size: Style.space(12); color: "#FFFFFF" }
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: root.backLabel
               color: "#FFFFFF"
               font.family: root.fontFamily
@@ -249,7 +256,7 @@ Item {
               enabled: root.channelId !== ""
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: Quickshell.execDetached(["wl-copy", "https://www.youtube.com/feeds/videos.xml?channel_id=" + root.channelId])
+              onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", "https://www.youtube.com/feeds/videos.xml?channel_id=" + root.channelId])
             }
             IconButton {
               anchors.verticalCenter: parent.verticalCenter
@@ -259,7 +266,7 @@ Item {
               enabled: root.channelId !== ""
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: Quickshell.execDetached(["xdg-open", "https://www.youtube.com/channel/" + root.channelId])
+              onClicked: Quickshell.execDetached(["/usr/bin/xdg-open", "https://www.youtube.com/channel/" + root.channelId])
             }
           }
         }
@@ -326,26 +333,38 @@ Item {
             rowSpacing: Style.space(root.compact ? 14 : 20)
             Repeater {
               model: root.rows
-              delegate: MediaCard {
-                logic: root.logic
+              delegate: Loader {
+                id: cardSlot
                 required property var modelData
                 width: root.cardWidth
                 height: Math.round(root.cardWidth * 9 / 16) + Style.space(54)
-                item: modelData
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                onPlayRequested: row => root.playVideo(row)
-                onPrefetchRequested: videoId => { if (root.logic) root.logic.request("prefetch", { videoId: videoId }) }
-                onEndRequested: media => root.enqueueVideo(media)
-                onOpenRequested: entity => root.openRequested(entity)
-                onPlaylistRequested: media => root.playlistPickerRequested(media)
-                onCopyRequested: item => root.copyRequested(item)
+                readonly property real pageY: {
+                  grid.parent.y; grid.y
+                  return y + grid.mapToItem(flick.contentItem, 0, 0).y
+                }
+                active: root.cardsReady && root.visible && root.Window.window !== null && root.Window.window.visible
+                  && pageY + height >= flick.contentY - height
+                  && pageY <= flick.contentY + flick.height + height
+                sourceComponent: MediaCard {
+                  objectName: "channelCard"
+                  logic: root.logic
+                  item: cardSlot.modelData
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onPlayRequested: row => root.playVideo(row)
+                  onPrefetchRequested: videoId => { if (root.logic) root.logic.request("prefetch", { videoId: videoId }) }
+                  onEndRequested: media => root.enqueueVideo(media)
+                  onOpenRequested: entity => root.openRequested(entity)
+                  onPlaylistRequested: media => root.playlistPickerRequested(media)
+                  onCopyRequested: item => root.copyRequested(item)
+                }
               }
             }
           }
           Text {
             visible: root.rows.length === 0
             anchors.centerIn: parent
+            textFormat: Text.PlainText
             text: root.sectionLoading ? L.tr("Загружаем…") : L.tr("В этом разделе пока пусто")
             color: root.dim
             font.family: root.fontFamily
@@ -371,6 +390,7 @@ Item {
           Text {
             id: playlistsHead
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("ПЛЕЙЛИСТЫ КАНАЛА")
             color: root.dim
             font.family: root.fontFamily
@@ -387,6 +407,7 @@ Item {
           Text {
             id: allLink
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("все ") + root.channelPlaylists.length + " →"
             color: Color.accent
             font.family: root.fontFamily

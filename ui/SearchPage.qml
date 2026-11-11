@@ -20,6 +20,25 @@ Item {
   property string query: ""
   property bool showEntity: false
   property real savedContentY: 0
+  function saveViewState() {
+    return { source: source, filter: filter, query: query, draft: field.text,
+      entity: showEntity ? entityContext : null, tab: channelPage.tab, entityStack: entityStack,
+      returnToCollection: returnToCollection, returnPage: returnPage }
+  }
+  function restoreViewState(state) {
+    if (!state) return
+    source = state.source || "youtube"
+    filter = state.filter || "all"
+    field.text = state.query || ""
+    if (state.entity) openEntity(state.entity, false, state.tab)
+    else if (state.query) search()
+    entityStack = state.entityStack || []
+    returnToCollection = state.returnToCollection === true
+    returnPage = state.returnPage === undefined ? -1 : state.returnPage
+    field.text = state.draft || ""
+    suggestionDebounce.stop()
+    suggestionsSuppressed = true
+  }
   property var copyEntity: null
   property var entityContext: null
   property bool returnToCollection: false
@@ -189,6 +208,12 @@ Item {
   onEntityOperationIdChanged: publishRetainedOperations()
   onMoreOperationIdChanged: publishRetainedOperations()
   onLogicChanged: publishRetainedOperations()
+  Component.onDestruction: {
+    if (logic) {
+      var owned = [searchOperationId, suggestionOperationId, entityOperationId, moreOperationId]
+      logic.retainedOperationIds = (logic.retainedOperationIds || []).filter(function(id) { return owned.indexOf(id) < 0 })
+    }
+  }
 
   function dismissSuggestions() {
     suggestionDebounce.stop()
@@ -502,6 +527,7 @@ Item {
           Icon { anchors.verticalCenter: parent.verticalCenter; name: root.source === "youtube" ? "square-play" : "music"; size: Style.space(14); color: Color.accent }
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: root.source === "youtube" ? "YT" : "YTM"
             color: Color.accent
             font.family: root.fontFamily
@@ -550,6 +576,7 @@ Item {
               visible: field.text === ""
               anchors.fill: parent
               verticalAlignment: Text.AlignVCenter
+              textFormat: Text.PlainText
               text: L.tr("Видео, плейлист или автор")
               color: root.dim
               font: field.font
@@ -598,6 +625,7 @@ Item {
           Text {
             id: escHint
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: field.text === "" ? "" : "esc"
             color: root.dim
             font.family: root.fontFamily
@@ -665,6 +693,7 @@ Item {
 
     Text {
       visible: !root.showEntity && root.query !== "" && root.rows.length > 0
+      textFormat: Text.PlainText
       text: L.tr("РЕЗУЛЬТАТЫ · ") + root.rows.length
       color: root.dim
       font.family: root.fontFamily
@@ -718,6 +747,7 @@ Item {
             }
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: "›"
               color: root.dim
               font.family: root.fontFamily
@@ -750,6 +780,7 @@ Item {
           - (entityCover.visible ? entityCover.width + parent.spacing : 0)
           - (entityActions.visible ? entityActions.width + parent.spacing : 0))
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: String(root.entityView.entity ? root.entityView.entity.title : L.tr("Страница каталога"))
         color: root.foreground
         font.family: root.fontFamily
@@ -798,7 +829,7 @@ Item {
           tooltipText: L.tr("Копировать ссылку")
           foreground: root.foreground
           fontFamily: root.fontFamily
-          onClicked: Quickshell.execDetached(["wl-copy", String(root.entityView.entity.canonicalUrl)])
+          onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", String(root.entityView.entity.canonicalUrl)])
         }
         IconButton {
           icon: "external-link"
@@ -808,7 +839,7 @@ Item {
           tooltipText: L.tr("Открыть в браузере")
           foreground: root.foreground
           fontFamily: root.fontFamily
-          onClicked: Quickshell.execDetached(["xdg-open", String(root.entityView.entity.canonicalUrl)])
+          onClicked: Quickshell.execDetached(["/usr/bin/xdg-open", String(root.entityView.entity.canonicalUrl)])
         }
       }
     }
@@ -834,6 +865,7 @@ Item {
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "triangle-alert"; size: Style.space(26); color: Color.urgent }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: root.failure && root.failure.error
             ? L.tb(root.failure.error.message || L.tr("Каталог недоступен")) : L.tr("Каталог недоступен")
           color: root.foreground
@@ -862,6 +894,7 @@ Item {
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: root.query === "" ? "search" : "search-x"; size: Style.space(26); color: root.dim }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: root.query === "" ? L.tr("Найдите видео, музыку или канал")
             : L.tr("По запросу «") + root.query + L.tr("» ничего не найдено")
           color: root.dim
@@ -904,6 +937,7 @@ Item {
             Text {
               anchors.verticalCenter: parent.verticalCenter
               rightPadding: Style.space(4)
+              textFormat: Text.PlainText
               text: L.tr("НЕДАВНИЕ")
               color: root.dim
               font.family: root.fontFamily
@@ -930,6 +964,7 @@ Item {
             id: clearRecent
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("очистить")
             color: root.dim
             font.family: root.fontFamily
@@ -1099,6 +1134,7 @@ Item {
                 anchors.right: parent.right
                 anchors.leftMargin: Style.space(8)
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: String(suggestionRow.modelData)
                 color: root.foreground
                 font.family: root.fontFamily

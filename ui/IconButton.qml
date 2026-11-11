@@ -42,7 +42,7 @@ Item {
     size: Style.space(root.iconSize)
     color: root.danger ? Color.urgent : (root.active ? Color.accent : (mouse.containsMouse ? root.foreground : root.dim))
     // Keep rotation on the GUI thread so stopping cannot overwrite the reset.
-    NumberAnimation on rotation { running: root.spinning; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+    NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.spinning; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
   }
 
   MouseArea {

@@ -236,6 +236,7 @@ Item {
             visible: playlistName.text === ""
             anchors.fill: parent
             verticalAlignment: Text.AlignVCenter
+            textFormat: Text.PlainText
             text: L.tr("Новый локальный плейлист")
             color: root.dim
             font: playlistName.font
@@ -264,6 +265,7 @@ Item {
       Text {
         width: parent.width - clearHistory.width
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.sections.filter(function(value) { return value.id === root.section })[0].label
           + (root.items.length > 0 ? "  ·  " + root.items.length : "")
         color: root.dim
@@ -316,6 +318,7 @@ Item {
         Icon { anchors.horizontalCenter: parent.horizontalCenter; name: "info"; size: Style.space(26); color: root.dim }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: root.section === "playlists" ? L.tr("Создайте первый локальный плейлист")
             : L.tr("В этом разделе пока ничего нет")
           color: root.dim

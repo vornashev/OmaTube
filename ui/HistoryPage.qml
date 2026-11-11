@@ -3,6 +3,7 @@ import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 import "i18n.js" as L
+import "GroupedRows.js" as GroupedRows
 
 Item {
   id: root
@@ -128,6 +129,7 @@ Item {
         width: root.compact ? parent.width : parent.width - filters.width - parent.spacing
         spacing: Style.space(3)
         Text {
+          textFormat: Text.PlainText
           text: L.tr("История")
           color: root.foreground
           font.family: root.fontFamily
@@ -136,6 +138,7 @@ Item {
         }
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: root.total + L.tr(" просмотров · хранится только на этом компьютере") + (root.recording ? "" : L.tr(" · запись выключена"))
           color: root.dim
           font.family: root.fontFamily
@@ -170,21 +173,26 @@ Item {
       height: Math.max(0, parent.height - y)
       clip: true
       boundsBehavior: Flickable.StopAtBounds
-      model: root.groups
-      spacing: Style.space(14)
+      model: GroupedRows.flatten(root.groups)
+      spacing: 0
       delegate: Column {
+        id: groupedRow
+        required property int index
+        topPadding: modelData._groupLabel && index > 0 ? Style.space(12) : 0
         required property var modelData
         width: list.width - (list.contentHeight > list.height ? Style.space(8) : 0)
         spacing: Style.space(2)
 
         Row {
+          visible: modelData._groupLabel !== undefined
           width: parent.width
           height: Style.space(17)
           spacing: Style.space(10)
           Text {
             id: groupLabel
             anchors.verticalCenter: parent.verticalCenter
-            text: modelData.label + " · " + modelData.items.length
+            textFormat: Text.PlainText
+            text: modelData._groupLabel + " · " + modelData._groupCount
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.space(10)
@@ -199,109 +207,107 @@ Item {
           }
         }
 
-        Repeater {
-          model: modelData.items
-          delegate: Item {
-            id: row
-            required property var modelData
-            readonly property var progress: modelData.watchProgress
-            readonly property bool partial: root.resumes(modelData)
-            width: parent.width
-            height: Style.space(58)
-            HoverHandler { id: rowHover }
+        Item {
+          id: row
+          readonly property var modelData: groupedRow.modelData
+          readonly property var progress: modelData.watchProgress
+          readonly property bool partial: root.resumes(modelData)
+          width: parent.width
+          height: Style.space(58)
+          HoverHandler { id: rowHover }
+          Rectangle {
+            anchors.fill: parent
+            color: rowHover.hovered ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05) : "transparent"
+          }
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.play(row.modelData)
+          }
+          Row {
+            anchors.fill: parent
+            anchors.topMargin: Style.space(4)
+            anchors.bottomMargin: Style.space(4)
+            anchors.leftMargin: Style.space(2)
+            anchors.rightMargin: Style.space(2)
+            spacing: Style.space(root.compact ? 10 : 14)
+
             Rectangle {
-              anchors.fill: parent
-              color: rowHover.hovered ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05) : "transparent"
-            }
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              onClicked: root.play(row.modelData)
-            }
-            Row {
-              anchors.fill: parent
-              anchors.topMargin: Style.space(4)
-              anchors.bottomMargin: Style.space(4)
-              anchors.leftMargin: Style.space(2)
-              anchors.rightMargin: Style.space(2)
-              spacing: Style.space(root.compact ? 10 : 14)
-
-              Rectangle {
-                width: Style.space(root.compact ? 80 : 88)
-                height: parent.height
-                color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .06)
-                clip: true
-                CatalogImage {
-                  anchors.fill: parent
-                  requestedSource: String(row.modelData.thumbnailUrl || (row.modelData.videoId ? "https://i.ytimg.com/vi/" + encodeURIComponent(row.modelData.videoId) + "/hqdefault.jpg" : ""))
-                  foreground: root.foreground
-                  fontFamily: root.fontFamily
-                  fillMode: Image.PreserveAspectCrop
-                }
-                Rectangle {
-                  visible: row.partial
-                  anchors.left: parent.left
-                  anchors.bottom: parent.bottom
-                  width: parent.width * Math.min(1, row.progress.position / row.progress.duration)
-                  height: Math.max(2, Style.space(3))
-                  color: Color.accent
-                }
-              }
-
-              Column {
-                width: parent.width - Style.space(root.compact ? 80 : 88) - (timeLabel.visible ? timeLabel.width + parent.spacing : 0) - actions.width - parent.spacing * 2
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Style.space(5)
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  text: String(row.modelData.title || row.modelData.videoId)
-                  color: root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.space(12)
-                  elide: Text.ElideRight
-                }
-                Text {
-                  width: parent.width
-                  textFormat: Text.PlainText
-                  text: [L.tb(row.modelData.author || ""), root.remaining(row.modelData)].filter(function(part) { return part !== "" }).join(" · ")
-                  color: row.partial ? Color.accent : root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.space(10)
-                  elide: Text.ElideRight
-                }
-              }
-
-              Text {
-                id: timeLabel
-                visible: !root.compact
-                width: visible ? implicitWidth : 0
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.clockTime(row.modelData.startedAt)
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.space(11)
-              }
-
-              QueueMark {
-                id: historyMark
-                anchors.verticalCenter: parent.verticalCenter
-                logic: root.logic
-                videoId: String(row.modelData.videoId || "")
+              width: Style.space(root.compact ? 80 : 88)
+              height: parent.height
+              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .06)
+              clip: true
+              CatalogImage {
+                anchors.fill: parent
+                requestedSource: String(row.modelData.thumbnailUrl || (row.modelData.videoId ? "https://i.ytimg.com/vi/" + encodeURIComponent(row.modelData.videoId) + "/hqdefault.jpg" : ""))
                 foreground: root.foreground
                 fontFamily: root.fontFamily
+                fillMode: Image.PreserveAspectCrop
               }
+              Rectangle {
+                visible: row.partial
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                width: parent.width * Math.min(1, row.progress.position / row.progress.duration)
+                height: Math.max(2, Style.space(3))
+                color: Color.accent
+              }
+            }
 
-              Row {
-                id: actions
-                visible: rowHover.hovered
-                width: visible ? implicitWidth : 0
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: Style.space(2)
-                IconButton { icon: "play"; iconSize: 14; tooltipText: row.partial ? L.tr("Продолжить") : L.tr("Играть"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.play(row.modelData) }
-                IconButton { visible: !historyMark.visible; width: visible ? implicitWidth : 0; icon: "list-plus"; iconSize: 14; tooltipText: L.tr("В мою очередь"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("enqueue_url", { url: row.modelData.canonicalUrl, placement: "end", media: row.modelData }) }
-                IconButton { icon: "x"; iconSize: 14; tooltipText: L.tr("Убрать из истории"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("history_remove", { playId: row.modelData.playId }) }
+            Column {
+              width: parent.width - Style.space(root.compact ? 80 : 88) - (timeLabel.visible ? timeLabel.width + parent.spacing : 0) - actions.width - parent.spacing * 2
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(5)
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: String(row.modelData.title || row.modelData.videoId)
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.space(12)
+                elide: Text.ElideRight
               }
+              Text {
+                width: parent.width
+                textFormat: Text.PlainText
+                text: [L.tb(row.modelData.author || ""), root.remaining(row.modelData)].filter(function(part) { return part !== "" }).join(" · ")
+                color: row.partial ? Color.accent : root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.space(10)
+                elide: Text.ElideRight
+              }
+            }
+
+            Text {
+              id: timeLabel
+              visible: !root.compact
+              width: visible ? implicitWidth : 0
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: root.clockTime(row.modelData.startedAt)
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.space(11)
+            }
+
+            QueueMark {
+              id: historyMark
+              anchors.verticalCenter: parent.verticalCenter
+              logic: root.logic
+              videoId: String(row.modelData.videoId || "")
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            Row {
+              id: actions
+              visible: rowHover.hovered
+              width: visible ? implicitWidth : 0
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(2)
+              IconButton { icon: "play"; iconSize: 14; tooltipText: row.partial ? L.tr("Продолжить") : L.tr("Играть"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.play(row.modelData) }
+              IconButton { visible: !historyMark.visible; width: visible ? implicitWidth : 0; icon: "list-plus"; iconSize: 14; tooltipText: L.tr("В мою очередь"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("enqueue_url", { url: row.modelData.canonicalUrl, placement: "end", media: row.modelData }) }
+              IconButton { icon: "x"; iconSize: 14; tooltipText: L.tr("Убрать из истории"); foreground: root.foreground; fontFamily: root.fontFamily; onClicked: root.logic.request("history_remove", { playId: row.modelData.playId }) }
             }
           }
         }
@@ -329,6 +335,7 @@ Item {
         width: parent.width - Style.space(40)
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
+        textFormat: Text.PlainText
         text: root.items.length === 0 ? (root.recording ? L.tr("История пока пуста. Просмотры появятся здесь после 10 секунд воспроизведения.") : L.tr("Запись истории выключена в настройках"))
           : L.tr("В этом фильтре ничего нет")
         color: root.dim

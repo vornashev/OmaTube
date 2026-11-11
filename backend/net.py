@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections import OrderedDict, deque
+from collections import deque
 from dataclasses import dataclass
 import hashlib
 import json
@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from .cache import ByteTTLCache
 
 LOGGER = logging.getLogger(__name__)
 WARM_URLS = (
@@ -68,7 +69,7 @@ class HttpClient:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         if proxy: self.session.proxies = {"http": proxy, "https": proxy}
-        self._validators: OrderedDict[str, tuple[dict[str, str], bytes]] = OrderedDict()
+        self._validators = ByteTTLCache(16 * 1024 * 1024, 256, 7200)
         self._lock = threading.Lock()
 
     def get(self, url: str, timeout: float = 8.0, headers: dict[str, str] | None = None, max_bytes: int = 2 * 1024 * 1024) -> Reply:
@@ -91,9 +92,13 @@ class HttpClient:
         if reply.status == 304 and known: return Reply(200, known[0], known[1])
         if reply.status == 200 and (reply.headers.get("etag") or reply.headers.get("last-modified")):
             with self._lock:
-                self._validators[url] = ({k: v for k, v in reply.headers.items() if k in {"etag", "last-modified"}}, reply.body)
-                while len(self._validators) > 256: self._validators.popitem(last=False)
+                validators = {k: v for k, v in reply.headers.items() if k in {"etag", "last-modified"}}
+                self._validators.put(url, (validators, reply.body), len(reply.body) + len(url.encode()) + 256)
         return reply
+
+    def prune_cache(self) -> None:
+        with self._lock:
+            self._validators.prune()
 
     def json(self, url: str, timeout: float = 6.0, not_found: Any = None, headers: dict[str, str] | None = None) -> Any:
         reply = self.get(url, timeout, {"Accept": "application/json", **(headers or {})})

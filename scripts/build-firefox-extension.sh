@@ -1,7 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Builds the Firefox flavour of browser-extension/: the same code with a Gecko manifest.
 # Usage: build-firefox-extension.sh <source dir> <output dir> [<output .xpi>]
 set -euo pipefail
+# System directories only: a binary planted earlier in the user's PATH must not run as part of setup.
+export PATH=/usr/local/bin:/usr/bin
 
 SOURCE="$1"
 OUT="$2"

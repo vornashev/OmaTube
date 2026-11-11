@@ -99,7 +99,7 @@ Item {
           name: "loader-circle"
           size: Style.space(28)
           color: Color.accent
-          RotationAnimator on rotation { running: spinner.visible; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
+          RotationAnimator on rotation { running: spinner.animationVisible; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onRunningChanged: if (!running && spinner) spinner.rotation = 0 }
         }
       }
 
@@ -128,6 +128,7 @@ Item {
             }
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: root.videoMode === "audio" ? L.tr("АУДИО") : (root.videoMode === "tile" ? L.tr("ТАЙЛ") : L.tr("ОКНО"))
               color: "#FFFFFF"
               font.family: root.fontFamily
@@ -145,6 +146,7 @@ Item {
           Text {
             id: durationText
             anchors.centerIn: parent
+            textFormat: Text.PlainText
             text: root.formatTime(root.duration)
             color: "#FFFFFF"
             font.family: root.fontFamily
@@ -225,6 +227,7 @@ Item {
           Icon { anchors.verticalCenter: parent.verticalCenter; name: "triangle-alert"; size: Style.space(14); color: Color.urgent }
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
             text: L.tr("mpv не смог открыть поток")
             color: Color.urgent
             font.family: root.fontFamily
@@ -253,7 +256,7 @@ Item {
           }
           Pill {
             text: L.tr("ЛОГ"); foreground: root.foreground; fontFamily: root.fontFamily
-            onClicked: Quickshell.execDetached(["wl-copy", L.tb(root.stateData.error ? root.stateData.error.message || "" : "")])
+            onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", L.tb(root.stateData.error ? root.stateData.error.message || "" : "")])
           }
         }
       }
@@ -266,6 +269,7 @@ Item {
         id: timeLeft
         width: Style.space(34)
         anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
         text: root.formatTime(seekArea.position)
         color: root.dim
         font.family: root.fontFamily
@@ -287,6 +291,7 @@ Item {
         width: Style.space(34)
         anchors.verticalCenter: parent.verticalCenter
         horizontalAlignment: Text.AlignRight
+        textFormat: Text.PlainText
         text: root.formatTime(root.duration)
         color: root.dim
         font.family: root.fontFamily
@@ -451,6 +456,7 @@ Item {
         width: Style.space(28)
         anchors.verticalCenter: parent.verticalCenter
         horizontalAlignment: Text.AlignRight
+        textFormat: Text.PlainText
         text: Math.round(root.volume) + "%"
         color: root.dim
         font.family: root.fontFamily
@@ -544,7 +550,7 @@ Item {
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: {
-          Quickshell.execDetached(["wl-copy", String(root.media.canonicalUrl)])
+          Quickshell.execDetached(["/usr/bin/wl-copy", String(root.media.canonicalUrl)])
           root.copiedUrl = String(root.media.canonicalUrl)
           copiedReset.restart()
         }

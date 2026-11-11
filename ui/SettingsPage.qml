@@ -193,6 +193,7 @@ Item {
   }
 
   component SectionLabel: Text {
+    textFormat: Text.PlainText
     color: root.dim
     font.family: root.fontFamily
     font.pixelSize: Style.space(10)
@@ -233,6 +234,7 @@ Item {
         spacing: Style.space(2)
         Text {
           width: parent.width
+          textFormat: Text.PlainText
           text: row.label
           color: root.foreground
           font.family: root.fontFamily
@@ -242,6 +244,7 @@ Item {
         Text {
           visible: row.description !== ""
           width: parent.width
+          textFormat: Text.PlainText
           text: row.description
           color: root.dim
           font.family: root.fontFamily
@@ -295,6 +298,7 @@ Item {
         Text {
           leftPadding: Style.space(12)
           bottomPadding: Style.space(12)
+          textFormat: Text.PlainText
           text: L.tr("НАСТРОЙКИ")
           color: root.dim
           font.family: root.fontFamily
@@ -325,6 +329,7 @@ Item {
               Icon { anchors.verticalCenter: parent.verticalCenter; name: modelData.icon; size: Style.space(14); color: chosen ? Color.accent : root.dim }
               Text {
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: modelData.label
                 color: chosen ? root.foreground : root.dim
                 font.family: root.fontFamily
@@ -391,6 +396,7 @@ Item {
             width: parent.width - closeButton.width
             spacing: Style.space(4)
             Text {
+              textFormat: Text.PlainText
               text: root.currentGroup.label
               color: root.foreground
               font.family: root.fontFamily
@@ -399,6 +405,7 @@ Item {
             }
             Text {
               width: parent.width
+              textFormat: Text.PlainText
               text: root.currentGroup.subtitle
               color: root.dim
               font.family: root.fontFamily
@@ -431,6 +438,7 @@ Item {
               anchors.margins: Style.space(14)
               spacing: Style.space(8)
               Text {
+                textFormat: Text.PlainText
                 text: L.tr("ПРЕВЬЮ")
                 color: root.dim
                 font.family: root.fontFamily
@@ -446,6 +454,7 @@ Item {
                   anchors.left: parent.left
                   anchors.leftMargin: Style.space(10)
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: "Mon 5 Oct 23:42"
                   color: root.dim
                   font.family: root.fontFamily
@@ -520,6 +529,7 @@ Item {
                 Text {
                   width: parent.width - stepper.width - Style.space(8)
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: L.tr("Ширина текста")
                   color: root.foreground
                   font.family: root.fontFamily
@@ -541,6 +551,7 @@ Item {
                       height: parent.height
                       horizontalAlignment: Text.AlignHCenter
                       verticalAlignment: Text.AlignVCenter
+                      textFormat: Text.PlainText
                       text: Number(root.preferences.textWidth || 220) + " px"
                       color: root.foreground
                       font.family: root.fontFamily
@@ -580,8 +591,8 @@ Item {
                   anchors.right: parent.right
                   anchors.margins: Style.space(10)
                   spacing: Style.space(3)
-                  Text { width: parent.width; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); font.weight: chosen ? Font.Bold : Font.Normal; elide: Text.ElideRight }
-                  Text { width: parent.width; text: modelData.description; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); elide: Text.ElideRight }
+                  Text { width: parent.width; textFormat: Text.PlainText; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); font.weight: chosen ? Font.Bold : Font.Normal; elide: Text.ElideRight }
+                  Text { width: parent.width; textFormat: Text.PlainText; text: modelData.description; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); elide: Text.ElideRight }
                 }
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.setPreference("barLayout", modelData.value) }
               }
@@ -633,10 +644,10 @@ Item {
                   }
                   Row {
                     spacing: Style.space(6)
-                    Text { text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); font.weight: chosen ? Font.Bold : Font.Normal }
+                    Text { textFormat: Text.PlainText; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); font.weight: chosen ? Font.Bold : Font.Normal }
                     Icon { visible: chosen; anchors.verticalCenter: parent.verticalCenter; name: "circle-check"; size: Style.space(13); color: Color.accent }
                   }
-                  Text { text: modelData.size; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+                  Text { textFormat: Text.PlainText; text: modelData.size; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
                 }
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.setPreference("panelFormat", modelData.value) }
               }
@@ -659,6 +670,7 @@ Item {
             Text {
               width: parent.width - dockChoice.width - parent.spacing
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: String(root.preferences.playerDock || "thin") === "thin"
                 ? L.tr("линия таймлайна с главами, ˄ раскрывает плеер поверх вкладки")
                 : L.tr("полная строка управления под каждой вкладкой")
@@ -674,6 +686,7 @@ Item {
             Icon { anchors.verticalCenter: parent.verticalCenter; name: "palette"; size: Style.space(13); color: root.dim }
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: L.tr("Цвета берутся из текущей темы Omarchy")
               color: root.dim
               font.family: root.fontFamily
@@ -718,6 +731,7 @@ Item {
           Text {
             width: parent.width
             bottomPadding: Style.space(10)
+            textFormat: Text.PlainText
             text: L.tr("Сэкономлено в этом треке: ")
               + (logic && logic.stateData.sponsor ? Math.floor(logic.stateData.sponsor.saved / 60) + ":" + ("0" + Math.round(logic.stateData.sponsor.saved % 60)).slice(-2) : "0:00")
             color: root.dim
@@ -735,6 +749,7 @@ Item {
                 anchors.left: parent.left
                 anchors.leftMargin: Style.space(8)
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: modelData.label
                 color: root.foreground
                 font.family: root.fontFamily
@@ -763,6 +778,7 @@ Item {
           spacing: Style.space(12)
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: root.youtubeAuth.error ? L.tb(root.youtubeAuth.error)
               : (root.youtubeAuth.authenticated
                 ? L.tr("Авторизованная сессия подключена")
@@ -824,6 +840,7 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: Style.space(8)
                 anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
                 text: L.tr("вернуть")
                 color: Color.accent
                 font.family: root.fontFamily
@@ -835,6 +852,7 @@ Item {
           Text {
             visible: root.hiddenChannels.length === 0
             width: parent.width
+            textFormat: Text.PlainText
             text: L.tr("Каналы, помеченные «Не рекомендовать», скрываются из поиска и страниц каталога.")
             color: root.dim
             font.family: root.fontFamily
@@ -859,8 +877,8 @@ Item {
               anchors.right: browserModeChoice.left
               anchors.verticalCenter: parent.verticalCenter
               spacing: Style.space(2)
-              Text { width: parent.width; text: L.tr("Режим для видео из браузера"); color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); elide: Text.ElideRight }
-              Text { width: parent.width; text: L.tr("«как сейчас» — оставить текущий режим плеера"); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); elide: Text.ElideRight }
+              Text { width: parent.width; textFormat: Text.PlainText; text: L.tr("Режим для видео из браузера"); color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); elide: Text.ElideRight }
+              Text { width: parent.width; textFormat: Text.PlainText; text: L.tr("«как сейчас» — оставить текущий режим плеера"); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); elide: Text.ElideRight }
             }
             Segmented {
               id: browserModeChoice
@@ -904,8 +922,8 @@ Item {
                 anchors.rightMargin: Style.space(10)
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Style.space(2)
-                Text { width: parent.width; text: String(browserRow.modelData.name || browserRow.modelData.id); color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); elide: Text.ElideRight }
-                Text { width: parent.width; text: root.browserDetail(browserRow.modelData); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); elide: Text.ElideMiddle }
+                Text { width: parent.width; textFormat: Text.PlainText; text: String(browserRow.modelData.name || browserRow.modelData.id); color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12); elide: Text.ElideRight }
+                Text { width: parent.width; textFormat: Text.PlainText; text: root.browserDetail(browserRow.modelData); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); elide: Text.ElideMiddle }
               }
               Item {
                 id: browserState
@@ -919,6 +937,7 @@ Item {
                   visible: browserRow.status !== "missing"
                   anchors.right: parent.right
                   anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
                   text: root.browserStateText(browserRow.modelData)
                   color: browserRow.status === "connected" || browserRow.status === "outdated" ? browserRow.tone : root.dim
                   font.family: root.fontFamily
@@ -942,6 +961,7 @@ Item {
             visible: !!root.browserStatus && root.browserStatus.browsers.length === 0
             width: parent.width
             topPadding: Style.space(4)
+            textFormat: Text.PlainText
             text: L.tr("Браузеры не найдены.")
             color: root.dim
             font.family: root.fontFamily
@@ -952,6 +972,7 @@ Item {
             visible: !root.browserStatus
             width: parent.width
             topPadding: Style.space(4)
+            textFormat: Text.PlainText
             text: L.tr("Не удалось получить статус связки.")
             color: root.dim
             font.family: root.fontFamily
@@ -965,6 +986,7 @@ Item {
             Icon { name: "info"; size: Style.space(13); color: root.dim }
             Text {
               width: parent.width - Style.space(21)
+              textFormat: Text.PlainText
               text: L.tr("Новые браузеры подхватываются при каждом запуске OmaTube. Вашего нет в списке? omatube browser-setup --dir ~/.config/<браузер>")
               color: root.dim
               font.family: root.fontFamily
@@ -976,6 +998,7 @@ Item {
             visible: root.browserError !== ""
             width: parent.width
             topPadding: Style.space(8)
+            textFormat: Text.PlainText
             text: root.browserError
             color: Color.urgent
             font.family: root.fontFamily
@@ -1003,7 +1026,7 @@ Item {
               labelSize: 11
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: Quickshell.execDetached(["wl-copy", root.extensionPath])
+              onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", root.extensionPath])
             }
             Pill {
               height: Style.space(31)
@@ -1012,7 +1035,7 @@ Item {
               labelSize: 11
               foreground: root.foreground
               fontFamily: root.fontFamily
-              onClicked: Quickshell.execDetached(["wl-copy", root.firefoxExtension])
+              onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", root.firefoxExtension])
             }
           }
 
@@ -1055,8 +1078,8 @@ Item {
               width: parent.width
               height: Style.space(36)
               Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Math.max(1, Style.space(1)); color: root.lineColor }
-              Text { anchors.left: parent.left; anchors.leftMargin: Style.space(8); anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12) }
-              Text { anchors.right: parent.right; anchors.rightMargin: Style.space(8); anchors.verticalCenter: parent.verticalCenter; text: modelData.value; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(11) }
+              Text { anchors.left: parent.left; anchors.leftMargin: Style.space(8); anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12) }
+              Text { anchors.right: parent.right; anchors.rightMargin: Style.space(8); anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.value; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(11) }
             }
           }
         }
@@ -1081,6 +1104,7 @@ Item {
             Text {
               width: parent.width - languageChoice.width - parent.spacing
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: String(root.preferences.language || "auto") === "auto"
                 ? L.tr("Язык системы: ") + (L.detect() === "ru" ? "Русский" : "English") : ""
               color: root.dim
@@ -1102,8 +1126,8 @@ Item {
               width: parent.width
               height: Style.space(34)
               Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: Math.max(1, Style.space(1)); color: root.lineColor }
-              Text { anchors.left: parent.left; anchors.leftMargin: Style.space(8); anchors.verticalCenter: parent.verticalCenter; width: Style.space(150); text: modelData.keys; color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.space(12) }
-              Text { anchors.left: parent.left; anchors.leftMargin: Style.space(166); anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12) }
+              Text { anchors.left: parent.left; anchors.leftMargin: Style.space(8); anchors.verticalCenter: parent.verticalCenter; width: Style.space(150); textFormat: Text.PlainText; text: modelData.keys; color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.space(12) }
+              Text { anchors.left: parent.left; anchors.leftMargin: Style.space(166); anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.label; color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(12) }
             }
           }
         }
@@ -1114,6 +1138,7 @@ Item {
           spacing: Style.space(6)
           Text {
             width: parent.width
+            textFormat: Text.PlainText
             text: L.tr("Нативный плеер YouTube и YouTube Music для Omarchy. Воспроизведение через mpv, каталог через youtubei.js, потоки через yt-dlp.")
             color: root.dim
             font.family: root.fontFamily

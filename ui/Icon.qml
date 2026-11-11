@@ -7,6 +7,8 @@ Item {
   property string name: ""
   property real size: 16
   property color color: "white"
+  // Item.visible alone stays true when its containing window is hidden.
+  readonly property bool animationVisible: visible && Window.window !== null && Window.window.visible
 
   implicitWidth: size
   implicitHeight: size

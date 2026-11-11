@@ -107,12 +107,13 @@ Item {
             fillMode: Image.PreserveAspectCrop
           }
           Icon {
+            id: bufferingSpinner
             anchors.centerIn: parent
             visible: root.buffering
             name: "loader-circle"
             size: Style.space(12)
             color: Color.accent
-            RotationAnimator on rotation { running: parent.visible; from: 0; to: 360; duration: 800; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
+            RotationAnimator on rotation { running: bufferingSpinner.animationVisible; from: 0; to: 360; duration: 800; loops: Animation.Infinite; onRunningChanged: if (!running && bufferingSpinner) bufferingSpinner.rotation = 0 }
           }
         }
         Rectangle {
@@ -125,6 +126,7 @@ Item {
           Text {
             id: resolutionLabel
             anchors.centerIn: parent
+            textFormat: Text.PlainText
             text: String(root.preferences.videoQuality || 1080)
             color: root.foreground
             font.family: root.fontFamily
@@ -157,7 +159,8 @@ Item {
             elide: root.marquee ? Text.ElideNone : Text.ElideRight
           }
           SequentialAnimation {
-            running: root.marquee && informationLabel.implicitWidth > informationSlot.width
+            running: informationLabel.visible && informationLabel.Window.window !== null && informationLabel.Window.window.visible
+              && root.marquee && informationLabel.implicitWidth > informationSlot.width
             loops: Animation.Infinite
             PauseAnimation { duration: 1200 }
             NumberAnimation { target: informationLabel; property: "x"; to: informationSlot.width - informationLabel.implicitWidth; duration: Math.max(1000, informationLabel.implicitWidth * 18); easing.type: Easing.Linear }

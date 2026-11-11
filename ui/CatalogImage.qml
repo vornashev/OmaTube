@@ -13,8 +13,15 @@ Image {
   property int retryAttempt: 0
   property int retryNonce: 0
   property int proxyPort: 47865
-  readonly property bool sized: width > 0 || height > 0
-  readonly property int widthBucket: width <= 0 ? 0 : (width <= 340 ? 320 : 0)
+  readonly property bool sized: width > 0 && height > 0
+  readonly property real displayScale: Window.window ? Window.window.devicePixelRatio : 1
+  readonly property int pixelWidth: Math.ceil(width * displayScale)
+  readonly property int pixelHeight: Math.ceil(height * displayScale)
+  // Reuse decoded images across small layout changes instead of caching every pixel size.
+  readonly property int decodeWidth: sized ? Math.ceil(pixelWidth / 32) * 32 : 1
+  readonly property int decodeHeight: sized ? Math.ceil(pixelHeight / 32) * 32 : 1
+  // mqdefault is 320x180: don't request it when the screen needs more pixels.
+  readonly property int widthBucket: sized && pixelWidth <= 320 && pixelHeight <= 180 ? 320 : 0
   readonly property string normalizedSource: normalizeSource(requestedSource)
   // Thumbnails go through the backend's local cache (disk cache, keep-alive, proxy);
   // after the first failure the image is fetched straight from YouTube instead.
@@ -24,11 +31,12 @@ Image {
   readonly property bool exhausted: requestedSource !== "" && status === Image.Error
     && !retrying && retryAttempt >= maxRetryAttempts
 
-  source: loadSource === "" || (proxied && !sized) ? "" : loadSource
+  source: loadSource === "" || !sized ? "" : loadSource
     + (loadSource.indexOf("?") >= 0 ? "&" : "?")
     + "omatubeRetry=" + retryNonce
   asynchronous: true
   cache: true
+  sourceSize: Qt.size(decodeWidth, decodeHeight)
   function normalizeSource(value) {
     var candidate = String(value || "").trim()
     if (candidate.indexOf("//") === 0) return "https:" + candidate
@@ -65,6 +73,7 @@ Image {
   }
 
   Text {
+    id: loadingSpinner
     anchors.centerIn: parent
     visible: root.status === Image.Loading || root.retrying
     text: "󰦖"
@@ -73,7 +82,7 @@ Image {
     font.family: root.fontFamily
     font.pixelSize: Math.min(root.width, root.height) * .3
     RotationAnimator on rotation {
-      running: parent.visible
+      running: loadingSpinner.visible && loadingSpinner.Window.window !== null && loadingSpinner.Window.window.visible
       from: 0
       to: 360
       duration: 800

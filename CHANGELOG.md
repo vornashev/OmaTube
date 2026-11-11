@@ -6,6 +6,19 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- The widget receives state changes over a persistent local connection instead of launching a status command repeatedly; playback position updates no longer invalidate unrelated UI bindings.
+- Inactive pages are released after ten minutes and restore their navigation, filters and scroll position on return. History, subscription feeds and channel grids create only rows/cards near the viewport.
+- Catalog, feed-response, lyrics and stream caches have byte budgets and expiry cleanup, reducing retained memory during long sessions.
+- The panel and its pages are created on first use and retain their state afterwards; covers decode at a size matched to the display, reducing memory use without blurring thumbnails on scaled monitors.
+- Hidden equalizers, loading indicators and scrolling bar titles stop animating when their item or window is hidden, reducing background CPU use.
+
+### Security
+
+- Titles, channel names and other text from YouTube render as plain text. Before, a title containing HTML could make the shell load a remote image and reveal your IP address.
+- The backend, the browser bridge, the installer and the widget run external programs (mpv, Node.js, Deno, ffmpeg, systemctl, wl-copy, xdg-open) only from `/usr/bin` and `/usr/local/bin`, never from earlier entries in your `PATH`.
+
 ## [0.2.0] - 2026-11-02
 
 ### Highlights

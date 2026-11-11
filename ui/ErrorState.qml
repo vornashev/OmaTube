@@ -66,7 +66,7 @@ Column {
       text: L.tr("СКОПИРОВАТЬ ОШИБКУ")
       foreground: root.foreground
       fontFamily: root.fontFamily
-      onClicked: Quickshell.execDetached(["wl-copy", root.title + ": " + root.message])
+      onClicked: Quickshell.execDetached(["/usr/bin/wl-copy", root.title + ": " + root.message])
     }
   }
 }

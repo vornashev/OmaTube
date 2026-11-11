@@ -61,11 +61,12 @@ Item {
       name: root.icon
       size: Style.space(root.iconSize)
       color: root.tone
-      NumberAnimation on rotation { running: root.spinning; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
+      NumberAnimation on rotation { running: playbackGlyph.animationVisible && root.spinning; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onStopped: playbackGlyph.rotation = 0 }
     }
     Text {
       visible: root.text !== ""
       anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
       text: root.text
       color: root.labelColor
       font.family: root.fontFamily

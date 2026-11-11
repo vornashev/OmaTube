@@ -318,6 +318,7 @@ Item {
         spacing: Style.space(6)
 
         Text {
+          textFormat: Text.PlainText
           text: (root.playlist.origin ? L.tr("ПЛЕЙЛИСТ YOUTUBE") : L.tr("ЛОКАЛЬНЫЙ ПЛЕЙЛИСТ"))
             + (root.listState === "playing" || root.listState === "switching" ? L.tr("  ·  ИГРАЕТ")
               : (root.listState === "paused" ? L.tr("  ·  НА ПАУЗЕ") : ""))
@@ -492,7 +493,7 @@ Item {
             tooltipText: L.tr("Открыть на YouTube")
             foreground: root.foreground
             fontFamily: root.fontFamily
-            onClicked: Quickshell.execDetached(["xdg-open", String(root.origin.canonicalUrl)])
+            onClicked: Quickshell.execDetached(["/usr/bin/xdg-open", String(root.origin.canonicalUrl)])
           }
           IconButton {
             icon: "trash-2"
@@ -531,12 +532,13 @@ Item {
             maxHeight: Style.space(11)
           }
           Icon {
+            id: loadingSpinner
             visible: root.listState === "starting" || root.listState === "switching"
             anchors.verticalCenter: parent.verticalCenter
             name: "loader-circle"
             size: Style.space(12)
             color: Color.accent
-            RotationAnimator on rotation { running: parent.visible; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onRunningChanged: if (!running) target.rotation = 0 }
+            RotationAnimator on rotation { running: loadingSpinner.animationVisible; from: 0; to: 360; duration: 900; loops: Animation.Infinite; onRunningChanged: if (!running && loadingSpinner) loadingSpinner.rotation = 0 }
           }
           Text {
             width: Math.min(implicitWidth, parent.width - Style.space(20))
@@ -582,8 +584,8 @@ Item {
         Column {
           width: parent.width - addPending.width - parent.spacing
           anchors.verticalCenter: parent.verticalCenter
-          Text { width: parent.width; text: L.tr("ДОБАВИТЬ В ПЛЕЙЛИСТ"); color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.bold: true; font.letterSpacing: 1 }
-          Text { width: parent.width; text: String(root.pendingMedia ? root.pendingMedia.title || L.tr("Выбранное видео") : ""); color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(11); elide: Text.ElideRight }
+          Text { width: parent.width; textFormat: Text.PlainText; text: L.tr("ДОБАВИТЬ В ПЛЕЙЛИСТ"); color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.bold: true; font.letterSpacing: 1 }
+          Text { width: parent.width; textFormat: Text.PlainText; text: String(root.pendingMedia ? root.pendingMedia.title || L.tr("Выбранное видео") : ""); color: root.foreground; font.family: root.fontFamily; font.pixelSize: Style.space(11); elide: Text.ElideRight }
         }
         Pill {
           id: addPending
@@ -615,11 +617,11 @@ Item {
           anchors.leftMargin: Style.space(12)
           anchors.rightMargin: Style.space(12)
           spacing: Style.space(12)
-          Text { width: Style.space(18); anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter; text: "#"; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
-          Text { width: parent.width - Style.space(18) - Style.space(root.compact ? 56 : 196) - parent.spacing * (root.compact ? 2 : 4); anchors.verticalCenter: parent.verticalCenter; text: L.tr("НАЗВАНИЕ"); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
-          Text { visible: !root.compact; width: visible ? Style.space(80) : 0; anchors.verticalCenter: parent.verticalCenter; text: L.tr("ПРОСМ."); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
-          Text { visible: !root.compact; width: visible ? Style.space(60) : 0; anchors.verticalCenter: parent.verticalCenter; text: "♥"; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
-          Text { width: Style.space(56); anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; text: L.tr("ВРЕМЯ"); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
+          Text { width: Style.space(18); anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter; textFormat: Text.PlainText; text: "#"; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
+          Text { width: parent.width - Style.space(18) - Style.space(root.compact ? 56 : 196) - parent.spacing * (root.compact ? 2 : 4); anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: L.tr("НАЗВАНИЕ"); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
+          Text { visible: !root.compact; width: visible ? Style.space(80) : 0; anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: L.tr("ПРОСМ."); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
+          Text { visible: !root.compact; width: visible ? Style.space(60) : 0; anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: "♥"; color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10) }
+          Text { width: Style.space(56); anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignRight; textFormat: Text.PlainText; text: L.tr("ВРЕМЯ"); color: root.dim; font.family: root.fontFamily; font.pixelSize: Style.space(10); font.letterSpacing: 1 }
         }
       }
 
@@ -648,6 +650,7 @@ Item {
         Text {
           visible: !root.loading && root.loadError === "" && root.rowsData.length === 0
           anchors.centerIn: parent
+          textFormat: Text.PlainText
           text: L.tr("В плейлисте пока нет видео")
           color: root.dim
           font.family: root.fontFamily

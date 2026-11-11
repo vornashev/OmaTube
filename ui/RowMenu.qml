@@ -126,6 +126,7 @@ Popup {
             }
             Text {
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: modelData.label
               color: modelData.danger === true ? Color.urgent : root.foreground
               font.family: root.fontFamily
@@ -134,6 +135,7 @@ Popup {
             Text {
               visible: String(modelData.shortcut || "") !== ""
               anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
               text: String(modelData.shortcut || "")
               color: root.muted
               font.family: root.fontFamily
