@@ -6,6 +6,8 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-11
+
 ### Changed
 
 - The browser extension source moved to `browser-extension/src/` so the repository carries a single plugin manifest, as the Omarchy plugin marketplace requires. The installed extension stays at `~/.local/share/omatube/browser-extension`; nothing needs reloading.
@@ -135,7 +137,8 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 - Player header and panel expose video mode, quality, authentication status, and configurable bar content.
 - Stream resolution supports authenticated cookies, separate audio/video tracks, and bounded quality selection.
 
-[Unreleased]: https://github.com/vornashev/OmaTube/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/vornashev/OmaTube/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/vornashev/OmaTube/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/vornashev/OmaTube/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/vornashev/OmaTube/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vornashev/OmaTube/releases/tag/v0.1.0
