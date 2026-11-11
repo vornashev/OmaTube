@@ -4,6 +4,7 @@
   "name": "OmaTube",
   "version": "0.2.0",
   "author": "vornashev",
+  "license": "MIT",
   "description": "Native YouTube and YouTube Music audio/video player with tiled and floating video, queue, collection, playlists and MPRIS",
   "kinds": ["bar-widget"],
   "entryPoints": { "barWidget": "ui/BarWidget.qml" },

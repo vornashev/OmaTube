@@ -10,7 +10,7 @@ YouTube and YouTube Music in your [Omarchy](https://omarchy.org/) bar. OmaTube i
 
 **English** · [Русский](README.ru.md)
 
-<p align="center"><img src="docs/screenshots/marketplace-preview.png" alt="OmaTube: the bar widget and the wide panel playing a Blender open movie" width="900"></p>
+<p align="center"><img src="preview.png" alt="OmaTube: the bar widget and the wide panel playing a Blender open movie" width="900"></p>
 
 <table>
   <tr>
@@ -56,7 +56,7 @@ omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
 omarchy plugin add https://github.com/vornashev/OmaTube.git --enable
 ```
 
-On first load, the plugin creates its Python environment, installs the Node.js dependencies, sets up the `omatube` command and a systemd user service, and starts the backend. You don't need `sudo`. The first start takes a minute while dependencies download.
+On first load, the plugin creates its Python environment, installs the Node.js dependencies, sets up the `omatube` command and a systemd user service, and starts the backend. You don't need sudo. The first start takes a minute while dependencies download.
 
 Then open the widget in the bar. The onboarding screen offers to connect your YouTube account. This is optional and imports cookies from Chromium.
 

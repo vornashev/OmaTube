@@ -25,7 +25,7 @@ scripts/changelog-section.sh Unreleased >/dev/null || die "CHANGELOG.md [Unrelea
 previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
 
 say "bumping the version to $version"
-for file in manifest.json package.json browser-extension/manifest.json; do
+for file in manifest.json package.json browser-extension/src/manifest.json; do
   # Edit in place so each file keeps its own formatting.
   sed -i -E '0,/"version": *"[^"]+"/s//"version": "'"$version"'"/' "$file"
 done
@@ -52,11 +52,11 @@ if ((!skip_tests)); then
   done
   [[ -n $python ]] || die "no Python with the backend dependencies; create .venv (see docs/development.md) or set PYTHON"
   "$python" -m unittest discover -s tests
-  node --test 'browser-extension/lib/*.test.mjs'
+  node --test 'browser-extension/src/lib/*.test.mjs'
 fi
 
 say "committing and tagging $tag"
-git add manifest.json package.json package-lock.json browser-extension/manifest.json CHANGELOG.md
+git add manifest.json package.json package-lock.json browser-extension/src/manifest.json CHANGELOG.md
 git commit -q -m "Release $tag"
 { printf 'OmaTube %s\n\n' "$tag"; scripts/changelog-section.sh "$version"; } | git tag -a --cleanup=verbatim "$tag" -F -
 

@@ -269,7 +269,7 @@ class NativeHostTests(unittest.TestCase):
 
     def test_extension_id_matches_manifest_key(self):
         import base64, hashlib
-        key = json.loads((ROOT / "browser-extension/manifest.json").read_text())["key"]
+        key = json.loads((ROOT / "browser-extension/src/manifest.json").read_text())["key"]
         digest = hashlib.sha256(base64.b64decode(key)).hexdigest()[:32]
         self.assertEqual("".join(chr(ord("a") + int(char, 16)) for char in digest), cli.EXTENSION_ID)
 

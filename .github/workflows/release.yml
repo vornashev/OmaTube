@@ -27,7 +27,7 @@ jobs:
           archive="omatube-${TAG}.tar.gz"
           xpi="omatube-firefox-${TAG}.xpi"
           git archive --format=tar.gz --prefix="omatube-${TAG}/" -o "$archive" "$TAG"
-          scripts/build-firefox-extension.sh browser-extension "$RUNNER_TEMP/firefox" "$xpi"
+          scripts/build-firefox-extension.sh browser-extension/src "$RUNNER_TEMP/firefox" "$xpi"
           sha256sum "$archive" "$xpi" > SHA256SUMS
           scripts/changelog-section.sh "${TAG#v}" > notes.md
 

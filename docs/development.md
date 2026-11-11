@@ -12,7 +12,7 @@
 | `catalog/worker.mjs` | Node.js worker on top of youtubei.js for search, channels, playlists and comments |
 | `bin/omatube` | CLI and browser bridge setup |
 | `bin/omatube-native-host` | Native messaging host for the browser extension |
-| `browser-extension/` | “Watch in OmaTube” extension (Chromium MV3; the Firefox build is generated) |
+| `browser-extension/src/` | “Watch in OmaTube” extension (Chromium MV3; the Firefox build is generated) |
 | `systemd/omatube.service` | Hardened user service that runs the backend |
 | `install.sh`, `bootstrap.sh`, `uninstall.sh` | Installer, first-load hook used by the widget, uninstaller |
 | `scripts/` | Dev sync, release tooling, checks, the youtubei.js patch and the Firefox build |
@@ -48,7 +48,7 @@ journalctl --user -fu omatube
 
 ```bash
 .venv/bin/python -m unittest discover -s tests
-node --test 'browser-extension/lib/*.test.mjs'
+node --test 'browser-extension/src/lib/*.test.mjs'
 scripts/check.sh   # versions, manifest, icons, CHANGELOG format, shellcheck when installed
 ```
 
@@ -74,7 +74,7 @@ Versions follow [Semantic Versioning](https://semver.org/). While OmaTube is 0.x
 
 1. Make sure `main` is clean and `[Unreleased]` describes the release.
 2. Run `scripts/release.sh X.Y.Z`. It:
-   - sets the version in `manifest.json`, `package.json`, `package-lock.json` and `browser-extension/manifest.json`;
+   - sets the version in `manifest.json`, `package.json`, `package-lock.json` and `browser-extension/src/manifest.json`;
    - renames `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, opens a new empty `[Unreleased]` and updates the compare links;
    - runs `scripts/check.sh` and the tests;
    - commits `Release vX.Y.Z` and creates an annotated tag `vX.Y.Z` whose message is the changelog section.

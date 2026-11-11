@@ -32,9 +32,9 @@ for command in python node npm deno mpv ffmpeg ffprobe systemctl jq flock sha256
   fi
 done
 VERSION="$(jq -er '.version' "$ROOT/manifest.json")"
-EXTENSION_VERSION="$(jq -er '.version' "$ROOT/browser-extension/manifest.json")"
+EXTENSION_VERSION="$(jq -er '.version' "$ROOT/browser-extension/src/manifest.json")"
 if [[ "$EXTENSION_VERSION" != "$VERSION" ]]; then
-  echo "browser-extension/manifest.json version $EXTENSION_VERSION does not match plugin version $VERSION" >&2
+  echo "browser-extension/src/manifest.json version $EXTENSION_VERSION does not match plugin version $VERSION" >&2
   exit 1
 fi
 
@@ -74,10 +74,10 @@ install -m 755 "$ROOT/bin/omatube" "$HOME/.local/bin/omatube"
 install -m 755 "$ROOT/bin/omatube-native-host" "$APP_DIR/bin/omatube-native-host"
 # Stable path for "Load unpacked" in Chromium; rebuilt so removed files do not linger.
 rm -rf "$APP_ROOT/browser-extension"
-cp -R "$ROOT/browser-extension" "$APP_ROOT/browser-extension"
+cp -R "$ROOT/browser-extension/src" "$APP_ROOT/browser-extension"
 find "$APP_ROOT/browser-extension" -name '*.test.mjs' -delete
 # Firefox flavour: an unpacked folder for about:debugging and an .xpi for "Install Add-on From File".
-"$ROOT/scripts/build-firefox-extension.sh" "$ROOT/browser-extension" "$APP_ROOT/browser-extension-firefox" "$APP_ROOT/omatube-firefox.xpi"
+"$ROOT/scripts/build-firefox-extension.sh" "$ROOT/browser-extension/src" "$APP_ROOT/browser-extension-firefox" "$APP_ROOT/omatube-firefox.xpi"
 "$HOME/.local/bin/omatube" browser-setup >/dev/null || echo "Browser bridge was not installed; run: omatube browser-setup" >&2
 install -m 644 "$ROOT/systemd/omatube.service" "$UNIT_DIR/omatube.service"
 

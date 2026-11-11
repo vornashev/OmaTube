@@ -19,7 +19,7 @@ fail() { echo "check: $*" >&2; failed=1; }
 # One version everywhere: the plugin, npm metadata and the browser extension.
 version="$(jq -er .version manifest.json)"
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "manifest.json version '$version' is not X.Y.Z"
-for source in "package.json:.version" "package-lock.json:.version" 'package-lock.json:.packages[""].version' "browser-extension/manifest.json:.version"; do
+for source in "package.json:.version" "package-lock.json:.version" 'package-lock.json:.packages[""].version' "browser-extension/src/manifest.json:.version"; do
   file="${source%%:*}"; query="${source#*:}"
   other="$(jq -er "$query" "$file")"
   [[ $other == "$version" ]] || fail "$file $query is $other, manifest.json says $version"
@@ -38,6 +38,9 @@ while IFS= read -r entry; do
 done < <(jq -r '.entryPoints[]' manifest.json)
 link="$(find . -name .git -prune -o -name node_modules -prune -o -name .venv -prune -o -type l -print -quit)"
 [[ -z $link ]] || fail "symlinks are not allowed in a plugin: $link"
+# The marketplace reads manifest.json at the root and one level down, and accepts exactly one.
+manifests="$(git ls-files | grep -E '^([^/]+/)?manifest\.json$' || true)"
+[[ $manifests == manifest.json ]] || fail "only the root manifest.json may sit within one level of the root; found: ${manifests//$'\n'/, }"
 
 # Every icon the UI asks for by a literal name exists.
 while IFS= read -r name; do

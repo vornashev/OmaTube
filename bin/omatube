@@ -11,7 +11,7 @@ from typing import Any
 
 MAX_RESPONSE = 8 * 1024 * 1024
 HOST_NAME = "com.vornashev.omatube"
-# Derived from the public `key` in browser-extension/manifest.json; stable for unpacked loads.
+# Derived from the public `key` in browser-extension/src/manifest.json; stable for unpacked loads.
 EXTENSION_ID = "iiljgncchpkekeadhbhlmgogcdioghho"
 # Known browsers: (id, name, family, profile dirs, host manifest dirs, Flatpak app ids).
 # "~/" is $HOME, "$XDG/" is $XDG_CONFIG_HOME. A browser counts as installed when one of its profile dirs

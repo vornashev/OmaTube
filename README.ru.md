@@ -10,7 +10,7 @@ YouTube и YouTube Music прямо в панели [Omarchy](https://omarchy.or
 
 [English](README.md) · **Русский**
 
-<p align="center"><img src="docs/screenshots/marketplace-preview.png" alt="OmaTube: виджет в баре и широкая панель" width="900"></p>
+<p align="center"><img src="preview.png" alt="OmaTube: виджет в баре и широкая панель" width="900"></p>
 
 <table>
   <tr>
@@ -56,7 +56,7 @@ omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
 omarchy plugin add https://github.com/vornashev/OmaTube.git --enable
 ```
 
-При первой загрузке плагин создаст Python-окружение, установит зависимости Node.js, настроит команду `omatube` и пользовательский сервис systemd, затем запустит бэкенд. `sudo` не нужен. Первый запуск занимает около минуты, пока скачиваются зависимости.
+При первой загрузке плагин создаст Python-окружение, установит зависимости Node.js, настроит команду `omatube` и пользовательский сервис systemd, затем запустит бэкенд. Права root не нужны. Первый запуск занимает около минуты, пока скачиваются зависимости.
 
 Затем откройте виджет в панели. Экран приветствия предложит подключить аккаунт YouTube. Это необязательно, подключение импортирует cookies из Chromium.
 

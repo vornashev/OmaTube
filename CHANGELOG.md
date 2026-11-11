@@ -6,6 +6,11 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Changed
+
+- The browser extension source moved to `browser-extension/src/` so the repository carries a single plugin manifest, as the Omarchy plugin marketplace requires. The installed extension stays at `~/.local/share/omatube/browser-extension`; nothing needs reloading.
+- The manifest declares the MIT license, and the marketplace preview sits at the repository root as `preview.png`.
+
 ### Fixed
 
 - The widget receives state changes over a persistent local connection instead of launching a status command repeatedly; playback position updates no longer invalidate unrelated UI bindings.
