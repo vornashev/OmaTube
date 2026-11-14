@@ -6,6 +6,8 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
 ### Changed
 
 - OmaTube needs nothing beyond a stock Omarchy. Deno now comes from a pinned wheel in `requirements.lock`, and the catalog worker runs on it instead of Node.js, so Node.js, npm and a system Deno are no longer required. npm packages install with `deno install --frozen` from `deno.lock`, at the same versions and integrity hashes as before.
@@ -149,7 +151,8 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 - Player header and panel expose video mode, quality, authentication status, and configurable bar content.
 - Stream resolution supports authenticated cookies, separate audio/video tracks, and bounded quality selection.
 
-[Unreleased]: https://github.com/vornashev/OmaTube/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/vornashev/OmaTube/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/vornashev/OmaTube/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/vornashev/OmaTube/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/vornashev/OmaTube/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/vornashev/OmaTube/compare/v0.1.0...v0.1.1
