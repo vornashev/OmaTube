@@ -490,7 +490,16 @@ Item {
   Timer {
     id: reconnectTimer
     interval: Math.min(30000, 1000 * Math.pow(2, Math.min(5, root.connectionFailures)))
-    onTriggered: { root.connectionFailures += 1; stateSocket.connected = true }
+    onTriggered: {
+      root.connectionFailures += 1
+      // No service manager restarts a backend that died. bootstrap.sh is idempotent: it starts one only when none is
+      // serving, so retry it on the second failed reconnect and every third one after that.
+      if (root.connectionFailures % 3 === 2 && !bootstrapProcess.running) {
+        bootstrapProcess.running = true
+        return
+      }
+      stateSocket.connected = true
+    }
   }
 
   Component {

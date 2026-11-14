@@ -46,5 +46,5 @@ body:
     id: logs
     attributes:
       label: Backend log
-      description: Output of `journalctl --user -u omatube -n 50 --no-pager`. Remove anything private.
+      description: Output of `omatube logs`. Remove anything private.
       render: text

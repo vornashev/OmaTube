@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from .auth import secure_cookie_file
 from .errors import OmaTubeError
-from .tools import system_tool
+from .tools import deno, die_with_parent, system_tool
 from .urls import canonical_video_url
 
 PROGRESS = re.compile(r"^download:(\d+|NA)/(\d+|NA)/(\d+|NA)/([\d.]+|NA)/([\d.]+|NA)$")
@@ -61,7 +61,7 @@ class DownloadManager:
     def argv(self, item: dict[str, Any]) -> list[str]:
         if self._command_factory: return self._command_factory(item)
         template = str(self.directory / "%(title).150B [%(id)s].%(ext)s")
-        argv = [self.python, "-m", "yt_dlp", "--ignore-config", "--no-playlist", "--js-runtimes", f"deno:{system_tool('deno')}",
+        argv = [self.python, "-m", "yt_dlp", "--ignore-config", "--no-playlist", "--js-runtimes", f"deno:{deno()}",
                 "--ffmpeg-location", system_tool("ffmpeg"), "--continue", "--extractor-args", "youtube:skip=hls", "--socket-timeout", "10", "--retries", "10", "--extractor-retries", "6",
                 "--newline", "--progress-template", "download:%(progress.downloaded_bytes)s/%(progress.total_bytes)s/%(progress.total_bytes_estimate)s/%(progress.speed)s/%(progress.eta)s",
                 "--print", "after_move:filepath", "-o", template]
@@ -99,7 +99,8 @@ class DownloadManager:
         stderr_tail = ""
         try:
             process = await asyncio.create_subprocess_exec(*self.argv(item), stdout=asyncio.subprocess.PIPE,
-                                                            stderr=asyncio.subprocess.PIPE, start_new_session=True)
+                                                            stderr=asyncio.subprocess.PIPE, start_new_session=True,
+                                                            preexec_fn=die_with_parent)
             self.processes[download_id] = process
             stderr_task = asyncio.ensure_future(process.stderr.read(65536))
             filepath = None; last_write = 0.0

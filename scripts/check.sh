@@ -16,10 +16,10 @@ esac
 failed=0
 fail() { echo "check: $*" >&2; failed=1; }
 
-# One version everywhere: the plugin, npm metadata and the browser extension.
+# One version everywhere: the plugin, package.json and the browser extension.
 version="$(jq -er .version manifest.json)"
 [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "manifest.json version '$version' is not X.Y.Z"
-for source in "package.json:.version" "package-lock.json:.version" 'package-lock.json:.packages[""].version' "browser-extension/src/manifest.json:.version"; do
+for source in "package.json:.version" "browser-extension/src/manifest.json:.version"; do
   file="${source%%:*}"; query="${source#*:}"
   other="$(jq -er "$query" "$file")"
   [[ $other == "$version" ]] || fail "$file $query is $other, manifest.json says $version"

@@ -9,6 +9,7 @@ from typing import Any
 
 from .auth import secure_cookie_file
 from .errors import OmaTubeError
+from .tools import die_with_parent
 
 CHANNELS_URL = "https://www.youtube.com/feed/channels"
 MAX_OUTPUT = 16 * 1024 * 1024
@@ -41,7 +42,8 @@ async def fetch_channels(python: Path | str, cookies: Path | None, proxy: str | 
     argv.extend(["--", CHANNELS_URL])
     process: asyncio.subprocess.Process | None = None
     try:
-        process = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True)
+        process = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, start_new_session=True,
+                                                         preexec_fn=die_with_parent)
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except (asyncio.CancelledError, TimeoutError) as exc:
         if process is not None and process.returncode is None:

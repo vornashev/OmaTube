@@ -29,8 +29,6 @@ for file in manifest.json package.json browser-extension/src/manifest.json; do
   # Edit in place so each file keeps its own formatting.
   sed -i -E '0,/"version": *"[^"]+"/s//"version": "'"$version"'"/' "$file"
 done
-jq --arg v "$version" '.version = $v | .packages[""].version = $v' package-lock.json > package-lock.json.tmp
-mv package-lock.json.tmp package-lock.json
 
 say "dating the CHANGELOG section"
 today="$(date +%F)"
@@ -56,7 +54,7 @@ if ((!skip_tests)); then
 fi
 
 say "committing and tagging $tag"
-git add manifest.json package.json package-lock.json browser-extension/src/manifest.json CHANGELOG.md
+git add manifest.json package.json browser-extension/src/manifest.json CHANGELOG.md
 git commit -q -m "Release $tag"
 { printf 'OmaTube %s\n\n' "$tag"; scripts/changelog-section.sh "$version"; } | git tag -a --cleanup=verbatim "$tag" -F -
 

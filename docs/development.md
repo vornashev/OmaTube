@@ -9,16 +9,17 @@
 | `manifest.json` | Omarchy plugin manifest; the entry point is `ui/BarWidget.qml` |
 | `ui/` | Omarchy Shell UI: QML components, `i18n.js` (Russian source strings → English) and Lucide icons |
 | `backend/` | Python service: player state, mpv control, storage (SQLite), MPRIS, SponsorBlock, lyrics, downloads, image cache |
-| `catalog/worker.mjs` | Node.js worker on top of youtubei.js for search, channels, playlists and comments |
-| `bin/omatube` | CLI and browser bridge setup |
+| `catalog/worker.mjs` | Deno worker on top of youtubei.js for search, channels, playlists and comments; runs with network access and one scratch directory only |
+| `bin/omatube` | CLI: starts and stops the backend (`start`, `stop`, `restart`, `logs`) and sets up the browser bridge |
 | `bin/omatube-native-host` | Native messaging host for the browser extension |
 | `browser-extension/src/` | “Watch in OmaTube” extension (Chromium MV3; the Firefox build is generated) |
-| `systemd/omatube.service` | Hardened user service that runs the backend |
 | `install.sh`, `bootstrap.sh`, `uninstall.sh` | Installer, first-load hook used by the widget, uninstaller |
 | `scripts/` | Dev sync, release tooling, checks, the youtubei.js patch and the Firefox build |
 | `tests/` | Backend and native-host tests (`unittest`) |
 
 At runtime the plugin lives in `~/.config/omarchy/plugins/vornashev.omatube`, and the backend is installed into `~/.local/share/omatube/app`. The UI talks to the backend over a Unix socket at `$XDG_RUNTIME_DIR/omatube/backend.sock`.
+
+The backend is a plain user process in a session of its own, so it survives shell restarts. `omatube start` launches it when the socket is down. The widget, the native host and the installer all go through that command, and a lock in `backend.main` keeps it to one instance. Child processes (mpv, yt-dlp, the catalog worker) get `PR_SET_PDEATHSIG`, so they exit with the backend. The log is `~/.local/state/omatube/backend.log`.
 
 ## Set up
 
@@ -26,13 +27,14 @@ At runtime the plugin lives in `~/.config/omarchy/plugins/vornashev.omatube`, an
 git clone https://github.com/vornashev/OmaTube.git && cd OmaTube
 python -m venv .venv
 .venv/bin/pip install --require-hashes --only-binary=:all: --no-deps -r requirements.lock
-npm ci --ignore-scripts && node scripts/patch-youtubei.mjs
+.venv/bin/deno install --frozen
+.venv/bin/deno run --no-prompt --allow-read=node_modules --allow-write=node_modules scripts/patch-youtubei.mjs
 ```
 
 ## Run your working tree
 
 ```bash
-scripts/dev-reload.sh                # install the backend, restart omatube.service, copy the UI, restart the shell
+scripts/dev-reload.sh                # install and restart the backend, copy the UI, restart the shell
 scripts/dev-reload.sh --plugin-only  # UI only
 scripts/dev-plugin.sh --watch        # copy ui/ on every save; Omarchy Shell reloads changed plugin files
 ```
@@ -41,7 +43,7 @@ To see QML warnings and backend logs:
 
 ```bash
 journalctl --user -f -t omarchy-shell | grep omatube
-journalctl --user -fu omatube
+omatube logs -f
 ```
 
 ## Test
@@ -74,7 +76,7 @@ Versions follow [Semantic Versioning](https://semver.org/). While OmaTube is 0.x
 
 1. Make sure `main` is clean and `[Unreleased]` describes the release.
 2. Run `scripts/release.sh X.Y.Z`. It:
-   - sets the version in `manifest.json`, `package.json`, `package-lock.json` and `browser-extension/src/manifest.json`;
+   - sets the version in `manifest.json`, `package.json` and `browser-extension/src/manifest.json`;
    - renames `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`, opens a new empty `[Unreleased]` and updates the compare links;
    - runs `scripts/check.sh` and the tests;
    - commits `Release vX.Y.Z` and creates an annotated tag `vX.Y.Z` whose message is the changelog section.
@@ -90,5 +92,5 @@ Pushing the tag starts `.github/workflows/release.yml`. The workflow checks the 
 
 ## Updating dependencies
 
-- **yt-dlp and other Python packages:** edit `requirements.txt`, then regenerate `requirements.lock` with hashes for the wheels Omarchy uses (CPython on x86_64 Linux). The installer reinstalls dependencies when the lock files change.
-- **youtubei.js:** bump it in `package.json`, run `npm install --ignore-scripts`, then run `node scripts/patch-youtubei.mjs`. The patch fails loudly if upstream code changed; see [PATCHES](../PATCHES).
+- **yt-dlp and other Python packages:** edit `requirements.txt`, then regenerate `requirements.lock` with hashes for the wheels Omarchy uses (CPython on x86_64 Linux; `deno` also lists its aarch64 wheel). The installer reinstalls dependencies when the lock files change.
+- **youtubei.js:** bump it in `package.json`, run `.venv/bin/deno install` to refresh `deno.lock`, then run the patch command from [Set up](#set-up). The patch fails loudly if upstream code changed; see [PATCHES](../PATCHES).

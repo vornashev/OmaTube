@@ -8,7 +8,7 @@ from typing import Any, Awaitable, Callable
 
 from .errors import OmaTubeError
 from .resolver import ResolvedMedia, ResolvedStream
-from .tools import system_tool
+from .tools import die_with_parent, system_tool
 
 MAX_RESPONSE = 1024 * 1024
 EventCallback = Callable[[dict[str, Any]], Awaitable[None]]
@@ -197,6 +197,7 @@ class MpvController:
                 *argv,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
+                preexec_fn=die_with_parent,
             )
         except FileNotFoundError as exc:
             raise OmaTubeError("dependency_missing", "Не найден mpv") from exc

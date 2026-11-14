@@ -58,7 +58,7 @@ Settings → Browser shows one row per browser with one of these statuses: conne
 
 ## How the bridge works
 
-The extension talks to a small native host, `omatube-native-host`, over native messaging. No network port is opened. The host accepts only a fixed set of messages (status, transfer, and reading or reordering the queue), so the extension cannot run any other backend command. If `omatube.service` is not running, the host starts it.
+The extension talks to a small native host, `omatube-native-host`, over native messaging. No network port is opened. The host accepts only a fixed set of messages (status, transfer, and reading or reordering the queue), so the extension cannot run any other backend command. If the backend is not running, the host starts it with `omatube start`.
 
 The host identifies the browser that started it from its parent process and records the last-seen time and extension version for each browser in `~/.local/share/omatube/browser-link.json`.
 

@@ -6,6 +6,18 @@ All notable changes to OmaTube are documented here. The format follows [Keep a C
 
 ## [Unreleased]
 
+### Changed
+
+- OmaTube needs nothing beyond a stock Omarchy. Deno now comes from a pinned wheel in `requirements.lock`, and the catalog worker runs on it instead of Node.js, so Node.js, npm and a system Deno are no longer required. npm packages install with `deno install --frozen` from `deno.lock`, at the same versions and integrity hashes as before.
+- The catalog worker runs in Deno's permission sandbox: network access, read and write in one scratch directory under `$XDG_RUNTIME_DIR/omatube`, and three temp-directory variables. It cannot read your files or start programs.
+- The backend is no longer a systemd user service. `omatube start` launches it as a user process in a session of its own; the widget, the browser bridge and the installer start it when they need it, and a lock keeps one instance. It survives shell restarts as before. mpv, yt-dlp and the catalog worker exit with it, even after a crash. The widget restarts a backend that died. The update removes the old unit automatically.
+- New commands: `omatube start`, `omatube stop`, `omatube restart` and `omatube logs [-f]`. The log is at `~/.local/state/omatube/backend.log`.
+- A proxy is set in `~/.config/omatube/proxy`. The update moves an `OMATUBE_PROXY` set in a drop-in for the old unit there.
+
+### Removed
+
+- The hardened service sandbox: the backend now has normal user permissions. The catalog worker keeps a sandbox of its own (see above).
+
 ## [0.2.1] - 2026-11-11
 
 ### Changed

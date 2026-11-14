@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import fcntl
 import json
 import traceback
 import os
@@ -67,6 +68,13 @@ VIEW_OPERATION_KINDS = {
 }
 
 
+def read_proxy_file(path: Path) -> str | None:
+    """~/.config/omatube/proxy: one proxy URL, for every request the backend, mpv and yt-dlp make."""
+    try: lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+    except (OSError, UnicodeDecodeError): return None
+    return next((line for line in lines if line and not line.startswith("#")), None)
+
+
 class Backend:
     def __init__(self, app_root: Path) -> None:
         runtime_env = os.environ.get("XDG_RUNTIME_DIR")
@@ -81,8 +89,9 @@ class Backend:
         if type(self.preferences["videoQuality"]) is not int or self.preferences["videoQuality"] not in VIDEO_QUALITIES:
             self.preferences["videoQuality"] = 1080
         self.storage = Storage(data_home / "library.sqlite3")
-        proxy = os.environ.get("OMATUBE_PROXY") or os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-        self.catalog = CatalogBridge(app_root / "catalog/worker.mjs", proxy=proxy)
+        proxy = os.environ.get("OMATUBE_PROXY") or read_proxy_file(config_home / "proxy") \
+            or os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        self.catalog = CatalogBridge(app_root / "catalog/worker.mjs", proxy=proxy, scratch=self.runtime / "catalog")
         python = app_root / ".venv/bin/python"
         if not python.exists(): python = Path(os.environ.get("OMATUBE_PYTHON", os.sys.executable))
         self.python = python; self.proxy = proxy
@@ -1053,8 +1062,25 @@ class Backend:
         self.storage.close()
 
 
+def single_instance() -> int | None:
+    """Hold an exclusive lock for the backend's lifetime; None when another backend already holds it.
+
+    Whoever starts the backend first (the widget, the browser bridge, the CLI) wins; a second start is a no-op
+    instead of a process that would unlink the live socket."""
+    runtime_env = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime_env: raise OmaTubeError("dependency_missing", "XDG_RUNTIME_DIR не задан")
+    runtime = Path(runtime_env) / "omatube"; runtime.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(runtime / "backend.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    try: fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(descriptor); return None
+    return descriptor
+
+
 async def async_main() -> None:
     parser = argparse.ArgumentParser(); parser.add_argument("--app-root", type=Path, default=Path(__file__).resolve().parents[1]); args = parser.parse_args()
+    if single_instance() is None:
+        print("OmaTube backend is already running", flush=True); return
     backend = Backend(args.app_root); await backend.start()
     stop = asyncio.Event(); loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM): loop.add_signal_handler(sig, stop.set)

@@ -37,5 +37,5 @@ jobs:
 
       - name: Catalog dependencies and youtubei.js patch
         run: |
-          npm ci --ignore-scripts
-          node scripts/patch-youtubei.mjs
+          deno install --frozen
+          deno run --no-prompt --allow-read=node_modules --allow-write=node_modules scripts/patch-youtubei.mjs

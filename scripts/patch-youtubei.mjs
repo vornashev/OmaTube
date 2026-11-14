@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S deno run --allow-read=node_modules --allow-write=node_modules
 import { readFile, writeFile } from 'node:fs/promises';
 
 const path = new URL('../node_modules/youtubei.js/dist/src/parser/youtube/Search.js', import.meta.url);

@@ -81,14 +81,14 @@ def socket_request(request: dict[str, Any], path: Path | None = None, timeout: f
 
 
 def backend_request(request: dict[str, Any], start_service: bool = True) -> dict[str, Any]:
-    """Send a request, starting the systemd user service once if the socket is missing."""
+    """Send a request, starting the backend once (omatube start) if the socket is missing."""
     try: return socket_request(request)
     except (FileNotFoundError, ConnectionRefusedError):
         if not start_service: raise HostError("backend_down", "Сервис OmaTube не запущен")
     except (OSError, json.JSONDecodeError) as exc:
         raise HostError("backend_down", f"Сервис OmaTube недоступен: {exc}") from exc
     try:
-        subprocess.run(["/usr/bin/systemctl", "--user", "start", "omatube.service"], timeout=BACKEND_START_TIMEOUT,
+        subprocess.run([str(Path.home() / ".local/bin/omatube"), "start"], timeout=BACKEND_START_TIMEOUT,
                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     except (OSError, subprocess.TimeoutExpired): pass
     deadline = time.monotonic() + BACKEND_START_TIMEOUT

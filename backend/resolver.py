@@ -14,7 +14,7 @@ from .auth import secure_cookie_file
 from .cache import ByteTTLCache
 from .errors import OmaTubeError
 from .net import NetStats
-from .tools import system_tool
+from .tools import deno, die_with_parent
 from .urls import canonical_video_url
 
 MAX_OUTPUT = 8 * 1024 * 1024
@@ -212,7 +212,7 @@ class MediaResolver:
             # Print only the fields we read: the full dump can exceed MAX_OUTPUT
             # because automatic_captions lists every auto-translated language.
             self.python, "-m", "yt_dlp", "--ignore-config", "--print", RESOLVE_FIELDS, "--print", STORYBOARD_FIELDS,
-            "--skip-download", "--no-playlist", "--js-runtimes", f"deno:{system_tool('deno')}",
+            "--skip-download", "--no-playlist", "--js-runtimes", f"deno:{deno()}",
             "--socket-timeout", "8", "--extractor-retries", "3",
             *(["--extractor-args", "youtube:skip=hls"] if skip_hls else []),
             "-f", (
@@ -229,7 +229,7 @@ class MediaResolver:
         try:
             process = await asyncio.create_subprocess_exec(
                 *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                start_new_session=True,
+                start_new_session=True, preexec_fn=die_with_parent,
             )
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=self.timeout)
         except asyncio.CancelledError:

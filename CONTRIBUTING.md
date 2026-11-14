@@ -8,7 +8,7 @@ Use the [bug report form](https://github.com/vornashev/OmaTube/issues/new?templa
 
 - the OmaTube version (`jq -r .version ~/.config/omarchy/plugins/vornashev.omatube/manifest.json`);
 - what you did and what happened;
-- the output of `omatube status` and the last lines of `journalctl --user -u omatube -n 50`.
+- the output of `omatube status` and the last lines of `omatube logs`.
 
 If playback suddenly fails for every video, YouTube has probably changed something. Check open issues first: one may already exist.
 

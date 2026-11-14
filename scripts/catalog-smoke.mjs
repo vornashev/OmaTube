@@ -1,8 +1,15 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S deno run --allow-run --allow-env --allow-read --allow-write
+// Live check of the catalog worker against YouTube, under the same Deno permissions as backend/catalog.py worker_argv.
 import { spawn } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import readline from 'node:readline';
 
-const child = spawn(process.execPath, ['catalog/worker.mjs'], { stdio: ['pipe', 'pipe', 'ignore'] });
+const scratch = mkdtempSync(join(tmpdir(), 'omatube-catalog-'));
+const child = spawn(process.execPath, ['run', '--quiet', '--no-prompt', '--cached-only', '--allow-net',
+  '--allow-env=TMPDIR,TMP,TEMP', `--allow-read=${scratch}`, `--allow-write=${scratch}`, 'catalog/worker.mjs'],
+{ stdio: ['pipe', 'pipe', 'inherit'], env: { ...process.env, TMPDIR: scratch, TMP: scratch, TEMP: scratch } });
 const lines = readline.createInterface({ input: child.stdout });
 let serial = 0;
 const pending = new Map();

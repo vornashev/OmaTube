@@ -5,14 +5,13 @@ export PATH=/usr/local/bin:/usr/bin
 
 PLUGIN_ID="vornashev.omatube"
 APP_ROOT="$HOME/.local/share/omatube"
-UNIT="$HOME/.config/systemd/user/omatube.service"
+LEGACY_UNIT_DIR="$HOME/.config/systemd/user"
 
 if command -v omarchy >/dev/null; then omarchy plugin disable "$PLUGIN_ID" >/dev/null 2>&1 || true; fi
-systemctl --user disable --now omatube.service >/dev/null 2>&1 || true
+if [[ -x "$HOME/.local/bin/omatube" ]]; then "$HOME/.local/bin/omatube" stop >/dev/null 2>&1 || true; fi
 if [[ -x "$HOME/.local/bin/omatube" ]]; then "$HOME/.local/bin/omatube" browser-setup --remove >/dev/null 2>&1 || true; fi
-rm -f "$UNIT" "$HOME/.local/bin/omatube"
+rm -f "$LEGACY_UNIT_DIR/omatube.service" "$LEGACY_UNIT_DIR/default.target.wants/omatube.service" "$HOME/.local/bin/omatube"
 rm -rf "$APP_ROOT/app" "$APP_ROOT/browser-extension" "$APP_ROOT/browser-extension-firefox" "$APP_ROOT/omatube-firefox.xpi" "$HOME/.config/omarchy/plugins/$PLUGIN_ID"
-systemctl --user daemon-reload
 if [[ "${1:-}" == "--purge" ]]; then
   rm -rf "$APP_ROOT" "$HOME/.config/omatube"
   echo "OmaTube and all local data removed."

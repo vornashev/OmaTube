@@ -44,11 +44,7 @@ YouTube и YouTube Music прямо в панели [Omarchy](https://omarchy.or
 
 ## Требования
 
-Omarchy с Omarchy Shell и пакеты:
-
-```bash
-omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
-```
+Omarchy с Omarchy Shell. Больше ничего: Python, mpv, ffmpeg и jq входят в Omarchy, а остальное (yt-dlp, Deno, youtubei.js) плагин скачает сам, фиксированных версий и со сверкой контрольных сумм.
 
 ## Установка
 
@@ -56,7 +52,9 @@ omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
 omarchy plugin add https://github.com/vornashev/OmaTube.git --enable
 ```
 
-При первой загрузке плагин создаст Python-окружение, установит зависимости Node.js, настроит команду `omatube` и пользовательский сервис systemd, затем запустит бэкенд. Права root не нужны. Первый запуск занимает около минуты, пока скачиваются зависимости.
+При первой загрузке плагин создаст собственное Python-окружение в `~/.local/share/omatube`, настроит команду `omatube` и запустит бэкенд. Права root не нужны. Первый запуск занимает около минуты, пока скачиваются зависимости.
+
+Бэкенд — обычный пользовательский процесс. Его запускает виджет или расширение браузера, когда он им нужен. Он продолжает играть при перезапуске шелла и завершается при выходе из системы. Воркер каталога работает в песочнице разрешений Deno: доступ к сети и одна рабочая папка, больше ничего.
 
 Затем откройте виджет в панели. Экран приветствия предложит подключить аккаунт YouTube. Это необязательно, подключение импортирует cookies из Chromium.
 
@@ -75,7 +73,7 @@ omarchy plugin update vornashev.omatube
 ~/.config/omarchy/plugins/vornashev.omatube/uninstall.sh --purge  # удалить всё
 ```
 
-Используйте этот скрипт, а не `omarchy plugin remove`: он ещё и останавливает сервис бэкенда и снимает регистрацию моста для браузера.
+Используйте этот скрипт, а не `omarchy plugin remove`: он ещё и останавливает бэкенд и снимает регистрацию моста для браузера.
 
 ## Как пользоваться
 
@@ -117,8 +115,9 @@ omatube browser-setup              # заново зарегистрироват
 
 | Симптом | Что сделать |
 | --- | --- |
-| Виджет пишет, что бэкенд недоступен | `systemctl --user status omatube` и `journalctl --user -u omatube -n 50` |
+| Виджет пишет, что бэкенд недоступен | `omatube logs`, затем `omatube restart` |
 | Перестали играть видео или сломался поиск | YouTube что-то поменял; обновитесь через `omarchy plugin update vornashev.omatube` и проверьте, нет ли нового релиза |
+| YouTube заблокирован в вашей сети | Запишите адрес прокси, например `http://127.0.0.1:7897`, в `~/.config/omatube/proxy` и выполните `omatube restart` |
 | Не открывается видео 18+ или для спонсоров | Подключите аккаунт в Настройки → Аккаунт (импорт cookies из Chromium) |
 | Расширение пишет «не подключено» | `omatube browser-status`, затем `omatube browser-setup` и перезагрузите расширение |
 | Другое | [Создайте issue](https://github.com/vornashev/OmaTube/issues/new/choose) с выводом `omatube status` |

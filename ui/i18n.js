@@ -112,7 +112,7 @@ var backend = {
   "Не удалось получить список подписок": "Couldn't get the subscription list",
   "XDG_RUNTIME_DIR не задан": "XDG_RUNTIME_DIR is not set",
   "Связь с процессом каталога потеряна": "Lost connection to the catalog process",
-  "Не найден Node.js": "Node.js not found",
+  "Не найден Deno": "Deno not found",
   "Некорректный ответ процесса каталога": "Invalid response from the catalog process",
   "Запрос каталога слишком велик": "Catalog request is too large",
   "Каталог не ответил вовремя": "The catalog didn't respond in time",

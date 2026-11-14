@@ -44,11 +44,7 @@ YouTube and YouTube Music in your [Omarchy](https://omarchy.org/) bar. OmaTube i
 
 ## Requirements
 
-Omarchy with Omarchy Shell, plus:
-
-```bash
-omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
-```
+Omarchy with Omarchy Shell. Nothing else: Python, mpv, ffmpeg and jq ship with Omarchy, and the plugin fetches the rest (yt-dlp, Deno, youtubei.js) at pinned versions with checksums.
 
 ## Installation
 
@@ -56,7 +52,9 @@ omarchy pkg add python nodejs npm deno mpv ffmpeg jq util-linux coreutils
 omarchy plugin add https://github.com/vornashev/OmaTube.git --enable
 ```
 
-On first load, the plugin creates its Python environment, installs the Node.js dependencies, sets up the `omatube` command and a systemd user service, and starts the backend. You don't need sudo. The first start takes a minute while dependencies download.
+On first load, the plugin creates its own Python environment under `~/.local/share/omatube`, sets up the `omatube` command and starts the backend. You don't need sudo. The first start takes a minute while dependencies download.
+
+The backend is a regular user process, started by the widget or the browser extension when they need it. It keeps playing when the shell restarts and stops when you log out. The catalog worker runs in Deno's permission sandbox: network access and one scratch directory, nothing else.
 
 Then open the widget in the bar. The onboarding screen offers to connect your YouTube account. This is optional and imports cookies from Chromium.
 
@@ -75,7 +73,7 @@ Your library and settings are kept. After an update, press **Reload** on the ext
 ~/.config/omarchy/plugins/vornashev.omatube/uninstall.sh --purge  # remove everything
 ```
 
-Use this script rather than `omarchy plugin remove`: the script also stops the backend service and unregisters the browser bridge.
+Use this script rather than `omarchy plugin remove`: the script also stops the backend and unregisters the browser bridge.
 
 ## Usage
 
@@ -113,8 +111,9 @@ Network requests go to YouTube (`youtube.com`, `i.ytimg.com`, `yt3.ggpht.com`), 
 
 | Symptom | What to try |
 | --- | --- |
-| Widget says the backend is unavailable | `systemctl --user status omatube` and `journalctl --user -u omatube -n 50` |
+| Widget says the backend is unavailable | `omatube logs`, then `omatube restart` |
 | Videos stop playing or search breaks for everyone | YouTube changed something; update with `omarchy plugin update vornashev.omatube` and check for a newer release |
+| YouTube is blocked on your network | Put a proxy URL such as `http://127.0.0.1:7897` in `~/.config/omatube/proxy`, then run `omatube restart` |
 | Age-restricted or members-only video fails | Connect your account in Settings → Account (imports Chromium cookies) |
 | Extension says “not connected” | `omatube browser-status`, then `omatube browser-setup`, then reload the extension |
 | Something else | [Open an issue](https://github.com/vornashev/OmaTube/issues/new/choose) with the output of `omatube status` |

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the current working tree: install the backend and restart omatube.service,
+# Run the current working tree: install and restart the backend,
 # copy the plugin UI and restart omarchy-shell so everything shows up at once.
 #   --plugin-only   skip the backend; only copy the UI and restart the shell
 set -euo pipefail
@@ -23,12 +23,8 @@ done
 if [[ $plugin_only == 0 ]]; then
   say "installing the backend"
   "$repo/install.sh" --backend-only
-  for _ in {1..20}; do
-    systemctl --user is-active --quiet omatube.service && break
-    sleep 0.25
-  done
-  systemctl --user is-active --quiet omatube.service \
-    || echo "backend not running: journalctl --user -u omatube -n 30" >&2
+  "$HOME/.local/bin/omatube" status >/dev/null \
+    || echo "backend not running: omatube logs" >&2
 fi
 
 say "copying the plugin"

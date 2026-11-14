@@ -10,17 +10,27 @@ import time
 
 from .errors import OmaTubeError
 from .net import NetStats
-from .tools import system_tool
+from .tools import deno, die_with_parent
 
 MAX_LINE = 8 * 1024 * 1024
 RETRY_DELAYS = (0.6, 1.2, 2.4)
+# youtubei.js keeps its session data under $TMPDIR; it gets a private directory and nothing else on disk.
+WORKER_ENV = ("TMPDIR", "TMP", "TEMP")
+
+
+def worker_argv(runtime: str, worker: Path, scratch: Path) -> list[str]:
+    """Deno's own permission sandbox: network, read/write in one scratch directory, three variables. No subprocesses,
+    no FFI, no other files, and --cached-only keeps the worker from fetching modules that the install did not pin."""
+    return [runtime, "run", "--quiet", "--no-prompt", "--cached-only", "--allow-net",
+            f"--allow-env={','.join(WORKER_ENV)}", f"--allow-read={scratch}", f"--allow-write={scratch}", str(worker)]
 
 
 
 class CatalogBridge:
-    def __init__(self, worker: Path, node: str | None = None, proxy: str | None = None) -> None:
+    def __init__(self, worker: Path, runtime: str | None = None, proxy: str | None = None, scratch: Path | None = None) -> None:
         self.worker = worker
-        self.node = node or system_tool("node")
+        self.runtime = runtime or deno()
+        self.scratch = scratch or Path(os.environ.get("XDG_RUNTIME_DIR") or "/tmp") / "omatube" / "catalog"
         self.proxy = proxy
         self.stats = NetStats()
         self.process: asyncio.subprocess.Process | None = None
@@ -96,27 +106,29 @@ class CatalogBridge:
             return
         if self.process or self.reader_task:
             await self._stop_locked()
-        env = None
+        self.scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
+        env = os.environ.copy()
+        # The npm packages were fetched into the app's own Deno cache at install time.
+        env.update({"DENO_DIR": str(self.worker.parent.parent / ".deno"), "DENO_NO_UPDATE_CHECK": "1", "NO_COLOR": "1",
+                    **{name: str(self.scratch) for name in WORKER_ENV}})
         if self.proxy:
-            env = os.environ.copy()
             env.update({
                 "HTTP_PROXY": self.proxy,
                 "HTTPS_PROXY": self.proxy,
-                "NODE_USE_ENV_PROXY": "1",
                 "NO_PROXY": ",".join(filter(None, [env.get("NO_PROXY"), "localhost,127.0.0.1,::1"])),
             })
         try:
             process = await asyncio.create_subprocess_exec(
-                self.node,
-                str(self.worker),
+                *worker_argv(self.runtime, self.worker, self.scratch),
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=None,
                 env=env,
                 limit=MAX_LINE + 1,
+                preexec_fn=die_with_parent,
             )
         except FileNotFoundError as exc:
-            raise OmaTubeError("dependency_missing", "Не найден Node.js") from exc
+            raise OmaTubeError("dependency_missing", "Не найден Deno") from exc
         self.process = process
         self._unhealthy_process = None
         self.reader_task = asyncio.create_task(self._reader(process))
